@@ -1,4 +1,4 @@
-FROM almalinux/9-base as repos
+FROM quay.io/almalinuxorg/9-base as repos
 FROM quay.io/centos-bootc/bootc-image-builder:latest as builder
 
 
