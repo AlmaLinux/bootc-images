@@ -3,7 +3,7 @@ on: [push]
 
 
 env:
-  URI_IMAGE_9: quay.io/imbev/almalinux-bootc
+  IMAGE_NAME: almalinux9-bootc
 
 
 jobs:
@@ -27,19 +27,20 @@ jobs:
           --security-opt=label=disable \
           --cap-add=all \
           --device /dev/fuse \
-          -t ${{ env.URI_IMAGE_9 }} \
+          -t ${{ env.IMAGE_NAME }} \
           -f 9/Containerfile \
           .
 
-    - name: Log in to Quay.io
+    - name: Log in to registry
       uses: redhat-actions/podman-login@v1
       with:
         username: ${{ secrets.REGISTRY_USER }}
         password: ${{ secrets.REGISTRY_PASSWORD }}
-        registry: quay.io
+        registry: ${{ secrets.IMAGE_REGISTRY }}
 
-    - name: Push To quay.io
+    - name: Push To registry
       uses: redhat-actions/push-to-registry@v2
       with:
-        image: ${{ env.URI_IMAGE_9 }}
+        image: ${{ env.IMAGE_NAME }}
         tags: ${{ steps.build-image.outputs.tags }}
+        registry: ${{ secrets.IMAGE_REGISTRY }}
