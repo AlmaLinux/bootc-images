@@ -3,12 +3,17 @@ on: [push]
 
 
 env:
-  IMAGE_NAME: 9-bootc
+  LATEST_MAJOR: 9
 
 
 jobs:
   build:
     runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - major: 9
+            minor: 9.4
 
     steps:
     - uses: actions/checkout@v4
@@ -27,8 +32,8 @@ jobs:
           --security-opt=label=disable \
           --cap-add=all \
           --device /dev/fuse \
-          -t ${{ env.IMAGE_NAME }} \
-          -f 9/Containerfile \
+          -t ${{ matrix.major }}-bootc \
+          -f ${{ matrix.major }}/Containerfile \
           .
 
     - name: Log in to registry
@@ -39,8 +44,8 @@ jobs:
         registry: ${{ secrets.IMAGE_REGISTRY }}
 
     - name: Push To registry
-      uses: redhat-actions/push-to-registry@v2
-      with:
-        image: ${{ env.IMAGE_NAME }}
-        tags: latest
-        registry: ${{ secrets.IMAGE_REGISTRY }}
+      run: |
+        export IMAGE_DEST=docker://${{ secrets.IMAGE_REGISTRY }}/${{ matrix.major }}-bootc
+        podman push ${{ matrix.major }}-bootc ${IMAGE_DEST}:${{ matrix.major }}
+        podman push ${{ matrix.major }}-bootc ${IMAGE_DEST}:${{ matrix.minor }}
+        [ ${{ matrix.major }} = ${{ env.LATEST_MAJOR }} ]; podman push ${{ matrix.major }}-bootc ${IMAGE_DEST}:latest

@@ -3,7 +3,7 @@
         "containers.bootc": "1",
         "bootc.diskimage-builder": "quay.io/centos-bootc/bootc-image-builder",
         "redhat.id": "almalinux",
-        "redhat.version-id": "9"
+        "redhat.version-id": "9.4"
     },
     "StopSignal": "SIGRTMIN+3"
 }
