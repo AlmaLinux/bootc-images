@@ -23,7 +23,7 @@ jobs:
           --security-opt=label=disable \
           --cap-add=all \
           --device /dev/fuse \
-          -t quay.io/imbev/almalinux-bootc \ # -t quay.io/almalinuxorg/9-bootc \
+          -t quay.io/imbev/almalinux-bootc \
           -f 9/Containerfile \
           .
 
