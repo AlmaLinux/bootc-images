@@ -7,7 +7,6 @@ COPY --from=repos /etc/dnf/vars /etc/dnf/vars
 COPY 9 /src
 COPY fedora-bootc /src/fedora-bootc
 WORKDIR /src
-RUN rm -vf /src/*.repo
 
 COPY --from=repos /etc/yum.repos.d/*.repo /src
 COPY --from=repos /etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-9 /etc/pki/rpm-gpg
