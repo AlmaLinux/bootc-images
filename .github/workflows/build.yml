@@ -3,7 +3,7 @@ on: [push]
 
 
 env:
-  IMAGE_NAME: almalinux9-bootc
+  IMAGE_NAME: 9-bootc
 
 
 jobs:
