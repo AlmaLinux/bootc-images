@@ -43,4 +43,3 @@ jobs:
       with:
         image: ${{ env.URI_IMAGE_9 }}
         tags: ${{ steps.build-image.outputs.tags }}
-        registry: quay.io
