@@ -1,0 +1,58 @@
+name: Build
+on: [push]
+
+
+env:
+  LATEST_MAJOR: 9
+  IMAGE_NAME: almalinux-bootc
+
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        platform: [linux/amd64]
+        include:
+          - major: 9
+            minor: 9.4
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y podman
+
+    - name: Build image
+      id: build-image
+      run: |
+        git submodule init
+        git submodule update
+        podman build \
+          --platform=${{ matrix.platform }} \
+          --security-opt=label=disable \
+          --cap-add=all \
+          --device /dev/fuse \
+          -t ${{ env.IMAGE_NAME }} \
+          -f ${{ matrix.major }}/Containerfile \
+          .
+
+    - name: Log in to registry
+      uses: redhat-actions/podman-login@v1
+      with:
+        username: ${{ secrets.REGISTRY_USER }}
+        password: ${{ secrets.REGISTRY_PASSWORD }}
+        registry: ${{ secrets.IMAGE_REGISTRY }}
+
+    - name: Push To registry
+      run: |
+        export IMAGE_DEST=docker://${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+        export DATE_STAMP=$(date -u '+%Y%m%d')
+
+        podman push ${{ env.IMAGE_NAME }} ${IMAGE_DEST}:${{ matrix.major }}
+        podman push ${{ env.IMAGE_NAME }} ${IMAGE_DEST}:${{ matrix.minor }}
+        podman push ${{ env.IMAGE_NAME }} ${IMAGE_DEST}:${{ matrix.minor }}-${DATE_STAMP}
+
+        [ ${{ matrix.major }} = ${{ env.LATEST_MAJOR }} ]; podman push ${{ env.IMAGE_NAME }} ${IMAGE_DEST}:latest
