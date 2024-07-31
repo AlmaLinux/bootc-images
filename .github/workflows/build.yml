@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        platform: [amd64]
+        platform: [linux/amd64]
         include:
           - major: 9
             minor: 9.4
