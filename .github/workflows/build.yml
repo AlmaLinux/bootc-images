@@ -48,7 +48,7 @@ jobs:
 
     - name: Push To registry
       run: |
-        export IMAGE_DEST=docker://${{ secrets.IMAGE_REGISTRY }}/${{ matrix.major }}-bootc
+        export IMAGE_DEST=docker://${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
         export DATE_STAMP=$(date -u '+%Y%m%d')
 
         podman push ${{ env.IMAGE_NAME }} ${IMAGE_DEST}:${{ matrix.major }}
