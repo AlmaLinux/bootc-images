@@ -3,6 +3,8 @@ name: "Build and Push"
 inputs:
   VERSION_MAJOR:
     required: true
+  DATE_STAMP:
+    required: true
   IMAGE_REGISTRY:
     required: true
   REGISTRY_USER:
@@ -15,10 +17,6 @@ runs:
     - name: Prepare environment
       shell: bash
       run: |
-        # Date stamp
-        DATE_STAMP=$(date -u '+%Y%m%d')
-        [ "x${DATE_STAMP}" != "x" ] && echo "DATE_STAMP=${DATE_STAMP}" >> "$GITHUB_ENV"
-
         # Platform / arch
         platform="${{ env.PLATFORM }}"
         ARCH=${platform#linux/}
@@ -46,8 +44,9 @@ runs:
         #   0 - no updates
         #   100 - updates available
         #   125 - tag/platform not found
+        #   127 - command not found
         res=0
-        docker run --quiet --rm ${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }} dnf check-update || res=$?
+        podman run --quiet --rm ${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }} dnf check-update || res=$?
         echo "res=${res}" >> "$GITHUB_ENV"
         echo "Exit code: '$res'"
 
@@ -80,36 +79,4 @@ runs:
       run: |
         # Tag: VERSION_MAJOR.VERSION_MINOR-DATE_STAMP-ARCH
         podman push ${{ env.IMAGE_NAME }} \
-          docker://${IMAGE_DEST}:${{ inputs.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}-${{ env.DATE_STAMP }}-${{ env.ARCH }}
-
-    - name: Login to registry (docker)
-      if: ${{ env.res != 0 }}
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ inputs.IMAGE_REGISTRY }}
-        username: ${{ inputs.REGISTRY_USER }}
-        password: ${{ inputs.REGISTRY_PASSWORD }}
-
-    - name: Create and push manifest (docker)
-      if: ${{ env.res != 0 }}
-      shell: bash
-      run:  |
-        # Manifest for both amd64 and arm64
-        second_arch=amd64
-        [ "${{ env.ARCH  }}" = "amd64" ] && second_arch=arm64
-
-        second_manifest=''
-        docker manifest inspect ${{ env.IMAGE_DEST}}:${{ inputs.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}-${{ env.DATE_STAMP }}-${second_arch} >/dev/null 2>&1 \
-          && second_manifest=${{ env.IMAGE_DEST}}:${{ inputs.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}-${{ env.DATE_STAMP }}-${second_arch}
-
-        # Loop over need tags: latest, VERSION_MAJOR, VERSION_MAJOR.VERSION_MINOR, VERSION_MAJOR.VERSION_MINOR-DATE_STAMP
-        for tag in latest ${{ inputs.VERSION_MAJOR }} ${{ inputs.VERSION_MAJOR }}.${{ env.VERSION_MINOR }} ${{ inputs.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}-${{ env.DATE_STAMP }}; do
-            [ ${{ inputs.VERSION_MAJOR }} != ${{ env.LATEST_MAJOR }} -a "${tag}" = "latest" ] && continue
-
-            docker manifest create ${IMAGE_DEST}:${tag} \
-              ${{ env.IMAGE_DEST}}:${{ inputs.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}-${{ env.DATE_STAMP }}-${{ env.ARCH }} ${second_manifest}
-
-            docker manifest inspect ${{ env.IMAGE_DEST }}:${tag}
-
-            docker manifest push ${{ env.IMAGE_DEST }}:${tag}
-        done
+          docker://${IMAGE_DEST}:${{ inputs.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}-${{ inputs.DATE_STAMP }}-${{ env.ARCH }}

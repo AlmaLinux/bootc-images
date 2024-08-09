@@ -2,8 +2,8 @@ name: Build amd64 and arm64
 on:
   workflow_dispatch:
   schedule:
-    # run Mon, Wed, Fri at 03:00 UTC
-    - cron:  '00 03 * * 1,3,5'
+    # run every day at 03:00 UTC
+    - cron:  '00 03 * * *'
 
 env:
   LATEST_MAJOR: 9
@@ -16,12 +16,21 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      date_stamp: ${{ steps.date-stamp.outputs.date_stamp }}
     steps:
-      - id: set-matrix
+      - name: Set matrix
+        id: set-matrix
         run: echo "matrix=[${{ env.VERSIONS_LIST }}]" >> $GITHUB_OUTPUT
 
+      - name: Dete stamp
+        id: date-stamp
+        run: |
+          # date stamp
+          date_stamp=$(date -u '+%Y%m%d')
+          [ "x${date_stamp}" != "x" ] && echo "date_stamp=${date_stamp}" >> "$GITHUB_OUTPUT"
+
   build-amd64:
-    name: amd64 '${{ matrix.VERSION_MAJOR}}' image
+    name: amd64 image
     runs-on: ubuntu-24.04
     needs: [set-versions-matrix]
     strategy:
@@ -30,6 +39,7 @@ jobs:
         VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
     env:
       PLATFORM: linux/amd64
+      DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
 
     steps:
     - uses: actions/checkout@v4
@@ -40,13 +50,14 @@ jobs:
       name: Build and Push
       with:
         VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
+        DATE_STAMP: ${{ env.DATE_STAMP }}
         IMAGE_REGISTRY: ${{ secrets.IMAGE_REGISTRY }}
         REGISTRY_USER:  ${{ secrets.REGISTRY_USER }}
         REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 
   start-arm64-runner:
+    name: arm64 self-hosted runner
     timeout-minutes: 10              # normally it only takes 1-2 minutes
-    name: arm64 self-hosted runner for '${{ matrix.VERSION_MAJOR}}'
     runs-on: ubuntu-24.04
     needs: [set-versions-matrix]
     strategy:
@@ -57,13 +68,13 @@ jobs:
     steps:
     - name: Setup and start the runner
       id: start-ec2-runner
-      uses: NextChapterSoftware/ec2-action-builder@v1.5
+      uses: NextChapterSoftware/ec2-action-builder@v1.7
       with:
         github_token: ${{ secrets.GIT_HUB_TOKEN }}
         aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws_region: ${{ secrets.AWS_REGION }}
-        ec2_ami_id: ${{ matrix.VERSION_MAJOR == '9' && secrets.EC2_AMI_ID_AL9 }}
+        ec2_ami_id: ${{ secrets[format('EC2_AMI_ID_AL{0}',  matrix.VERSION_MAJOR)] }}
         ec2_subnet_id: ${{ secrets.EC2_SUBNET_ID}}
         ec2_security_group_id: ${{ secrets.EC2_SECURITY_GROUP_ID }}
 
@@ -78,7 +89,8 @@ jobs:
           ]
 
   build-arm64:
-    name: arm64 '${{ matrix.VERSION_MAJOR}}' image
+    if: ${{ always() && contains(join(needs.start-arm64-runner.result, ','), 'success') }}
+    name: arm64 image
     runs-on: ${{ github.run_id }}
     needs: [set-versions-matrix, start-arm64-runner]
     strategy:
@@ -87,22 +99,89 @@ jobs:
         VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
     env:
       PLATFORM: linux/arm64
+      DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
 
     steps:
-    - name: Install dependencies
+    - name: Set envirounment
       run: |
-        sudo dnf config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo
-        sudo yum -y -q install docker-ce docker-ce-cli containerd.io podman git
-        sudo systemctl start docker
+        # Redefine VERSION_MAJOR
+        release=$(rpm -q --qf="%{VERSION}\n" almalinux-release 2>/dev/null)
+        VERSION_MAJOR=$(cut -d '.' -f 1 <<< "$release")
+        [ "x${VERSION_MAJOR}" != "x" ] && echo "VERSION_MAJOR=${VERSION_MAJOR}" >> "$GITHUB_ENV"
+
+    - name: Install dependencies (${{ env.VERSION_MAJOR }})
+      run: |
+        sudo yum -y -q update
+        sudo yum -y -q install podman git
 
     - uses: actions/checkout@v4
       with:
         submodules: true
 
     - uses: ./.github/actions/shared-steps
-      name: Build and Push
+      name: Build and Push (${{ env.VERSION_MAJOR }})
       with:
-        VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
+        VERSION_MAJOR: ${{ env.VERSION_MAJOR }} # redefined VERSION_MAJOR, not from the matrix
+        DATE_STAMP: ${{ env.DATE_STAMP }}
         IMAGE_REGISTRY: ${{ secrets.IMAGE_REGISTRY }}
         REGISTRY_USER:  ${{ secrets.REGISTRY_USER }}
         REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+
+  push-manifest:
+    if: ${{ always() && contains(join(needs.*.result, ','), 'success') }}
+    name: Push manifest
+    needs: [set-versions-matrix, build-amd64, start-arm64-runner, build-arm64]
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
+    env:
+      DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
+
+    steps:
+      - name: Set envirounment
+        run: |
+          # Minor version for both amd64 and arm64
+          for MACHINE in x86_64 aarch64; do
+            release=$(rpm -q --qf="%{VERSION}\n" https://repo.almalinux.org/almalinux/almalinux-release-latest-${{ matrix.VERSION_MAJOR }}.${MACHINE}.rpm 2>/dev/null)
+            VERSION_MINOR=$(cut -d '.' -f 2 <<< "$release")
+            [ "x${VERSION_MINOR}" != "x" ] && echo "VERSION_MINOR_${MACHINE}=${VERSION_MINOR}" >> "$GITHUB_ENV"
+             unset VERSION_MINOR
+          done
+
+      - name: Login to registry (docker)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.IMAGE_REGISTRY }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Create and push manifest (docker)
+        run:  |
+          # Manifest for both amd64 and arm64
+          IMAGE_DEST=${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+
+          amd64_exists=0
+          arm64_exists=0
+          docker manifest inspect ${IMAGE_DEST}:${{ matrix.VERSION_MAJOR }}.${{ env.VERSION_MINOR_x86_64 }}-${{ env.DATE_STAMP }}-amd64 >/dev/null 2>&1 \
+            || amd64_exists=$?
+          docker manifest inspect ${IMAGE_DEST}:${{ matrix.VERSION_MAJOR }}.${{ env.VERSION_MINOR_aarch64 }}-${{ env.DATE_STAMP }}-arm64 >/dev/null 2>&1 \
+            || arm64_exists=$?
+          [ $amd64_exists -ne 0 -o $arm64_exists -ne 0 ] && exit 0
+
+          # Don't push manifest if amd64 and arm64 minor versions differ
+          VERSION_MINOR=${{ env.VERSION_MINOR_x86_64 }}
+          [ "${{ env.VERSION_MINOR_x86_64 }}" != "${{ env.VERSION_MINOR_aarch64 }}" ] && exit 0
+
+          # Loop over need tags: latest, VERSION_MAJOR, VERSION_MAJOR.VERSION_MINOR, VERSION_MAJOR.VERSION_MINOR-DATE_STAMP
+          for tag in latest ${{ matrix.VERSION_MAJOR }} ${{ matrix.VERSION_MAJOR }}.${VERSION_MINOR} ${{ matrix.VERSION_MAJOR }}.${VERSION_MINOR}-${{ env.DATE_STAMP }}; do
+              [ ${{ matrix.VERSION_MAJOR }} != ${{ env.LATEST_MAJOR }} -a "${tag}" = "latest" ] && continue
+              docker manifest create ${IMAGE_DEST}:${tag} \
+                  ${IMAGE_DEST}:${{ matrix.VERSION_MAJOR }}.${VERSION_MINOR}-${{ env.DATE_STAMP }}-amd64 \
+                  ${IMAGE_DEST}:${{ matrix.VERSION_MAJOR }}.${VERSION_MINOR}-${{ env.DATE_STAMP }}-arm64
+
+              docker manifest inspect ${IMAGE_DEST}:${tag}
+
+              docker manifest push ${IMAGE_DEST}:${tag}
+          done
