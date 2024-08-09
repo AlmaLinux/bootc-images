@@ -6,9 +6,7 @@
 
 - https://containers.github.io/bootc/
 
-### Available Official Images
-
-N/A
+- https://quay.io/repository/almalinuxorg/almalinux-bootc?tab=tags
 
 ## Usage
 
