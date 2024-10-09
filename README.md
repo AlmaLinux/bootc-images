@@ -8,6 +8,12 @@
 
 ### Available Official Images
 
+- https://quay.io/repository/almalinuxorg/almalinux-bootc?tab=tags
+
+## News
+
+- https://almalinux.org/blog/2024-09-02-bootc-almalinux-heliumos/
+
 N/A
 
 ## Usage
