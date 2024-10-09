@@ -14,8 +14,6 @@
 
 - https://almalinux.org/blog/2024-09-02-bootc-almalinux-heliumos/
 
-N/A
-
 ## Usage
 
 ### AlmaLinux 9
