@@ -16,6 +16,12 @@
 
 ## Usage
 
+It may be neccessary to run the following before building:
+
+```sh
+git submodule update --init --recursive
+```
+
 ### AlmaLinux 9
 
 ```sh
