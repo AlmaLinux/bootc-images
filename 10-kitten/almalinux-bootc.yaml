@@ -8,7 +8,8 @@ variables:
   distro: "almalinux10"
 
 packages:
-  - almalinux-repos
+  #- almalinux-repos
+  - almalinux-kitten-repos
 
 postprocess:
   - |
