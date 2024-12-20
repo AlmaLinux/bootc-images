@@ -1,6 +1,17 @@
 name: Build amd64 and arm64
 on:
   workflow_dispatch:
+    inputs:
+      RELEASE:
+        description: 'AlmaLinux release'
+        required: true
+        default: '9'
+        type: choice
+        options:
+          - 10-kitten
+          - 10
+          - 9
+
   schedule:
     # run every day at 03:00 UTC
     - cron:  '00 03 * * *'
@@ -8,7 +19,7 @@ on:
 env:
   LATEST_MAJOR: 9
   IMAGE_NAME: almalinux-bootc
-  VERSIONS_LIST: '"9", "10-kitten"'
+  VERSIONS_LIST: '"9", "10-kitten", "10"'
 
 jobs:
   set-versions-matrix:
@@ -22,10 +33,16 @@ jobs:
         id: set-matrix
         run: |
           # Format json for versions matrix
-          sudo apt-get install jq
-          echo "matrix=$(jq -c <<< '[${{ env.VERSIONS_LIST }}]')" >> $GITHUB_OUTPUT
+          case ${{ github.event_name }} in
+            workflow_dispatch)
+              echo "matrix=$(jq -c <<< '["${{ inputs.RELEASE }}"]')" >> $GITHUB_OUTPUT
+              ;;
+            schedule)
+              echo "matrix=$(jq -c <<< '[${{ env.VERSIONS_LIST }}]')" >> $GITHUB_OUTPUT
+              ;;
+          esac
 
-      - name: Dete stamp
+      - name: Date stamp
         id: date-stamp
         run: |
           # date stamp
@@ -106,7 +123,7 @@ jobs:
       DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
 
     steps:
-    - name: Set envirounment
+    - name: Set environment
       run: |
         # Redefine VERSION_MAJOR as runner's AlmaLinux version may not match matrix one
         almalinux_release=$(rpm -qf /etc/almalinux-release)
@@ -149,14 +166,17 @@ jobs:
       DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
 
     steps:
-      - name: Set envirounment
+      - name: Set environment
         run: |
           # Minor version for both amd64 and arm64
           for MACHINE in x86_64 aarch64; do
             VERSION_MINOR=
             release=${{ matrix.VERSION_MAJOR }}
             if [[ "${{ matrix.VERSION_MAJOR }}" != *'kitten'* ]]; then
-              release=$(rpm -q --qf="%{VERSION}\n" https://repo.almalinux.org/almalinux/almalinux-release-latest-${{ matrix.VERSION_MAJOR }}.${MACHINE}.rpm 2>/dev/null)
+              almalinux_release=https://repo.almalinux.org/almalinux/almalinux-release-latest-${{ matrix.VERSION_MAJOR }}.${MACHINE}.rpm
+              # TODO: remove when AlmaLinux 10.0 is released
+              [ "${{ matrix.VERSION_MAJOR }}" = "10" ] && almalinux_release=https://vault.almalinux.org/almalinux-release-latest-10-beta.${MACHINE}.rpm
+              release=$(rpm -q --qf="%{VERSION}\n" ${almalinux_release} 2>/dev/null)
               VERSION_MINOR=.$(cut -d '.' -f 2 <<< "$release")
             fi
             echo "VERSION_MINOR_${MACHINE}=${VERSION_MINOR}" >> "$GITHUB_ENV"
