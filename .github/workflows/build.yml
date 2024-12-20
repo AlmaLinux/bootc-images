@@ -8,7 +8,7 @@ on:
 env:
   LATEST_MAJOR: 9
   IMAGE_NAME: almalinux-bootc
-  VERSIONS_LIST: '"9"' # '"9", "10"'
+  VERSIONS_LIST: '"9", "10-kitten"'
 
 jobs:
   set-versions-matrix:
@@ -20,7 +20,10 @@ jobs:
     steps:
       - name: Set matrix
         id: set-matrix
-        run: echo "matrix=[${{ env.VERSIONS_LIST }}]" >> $GITHUB_OUTPUT
+        run: |
+          # Format json for versions matrix
+          sudo apt-get install jq
+          echo "matrix=$(jq -c <<< '[${{ env.VERSIONS_LIST }}]')" >> $GITHUB_OUTPUT
 
       - name: Dete stamp
         id: date-stamp
@@ -37,6 +40,7 @@ jobs:
       fail-fast: false
       matrix:
         VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
+
     env:
       PLATFORM: linux/amd64
       DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
@@ -74,7 +78,7 @@ jobs:
         aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws_region: ${{ secrets.AWS_REGION }}
-        ec2_ami_id: ${{ secrets[format('EC2_AMI_ID_AL{0}',  matrix.VERSION_MAJOR)] }}
+        ec2_ami_id: ${{ secrets[format('EC2_AMI_ID_AL{0}', ( matrix.VERSION_MAJOR == '10-kitten' && '10_KITTEN' || matrix.VERSION_MAJOR))] }}
         ec2_subnet_id: ${{ secrets.EC2_SUBNET_ID}}
         ec2_security_group_id: ${{ secrets.EC2_SECURITY_GROUP_ID }}
 
@@ -104,10 +108,15 @@ jobs:
     steps:
     - name: Set envirounment
       run: |
-        # Redefine VERSION_MAJOR
-        release=$(rpm -q --qf="%{VERSION}\n" almalinux-release 2>/dev/null)
-        VERSION_MAJOR=$(cut -d '.' -f 1 <<< "$release")
-        [ "x${VERSION_MAJOR}" != "x" ] && echo "VERSION_MAJOR=${VERSION_MAJOR}" >> "$GITHUB_ENV"
+        # Redefine VERSION_MAJOR as runner's AlmaLinux version may not match matrix one
+        almalinux_release=$(rpm -qf /etc/almalinux-release)
+        release=$(rpm -q --qf="%{VERSION}\n" ${almalinux_release} 2>/dev/null)
+        if [[ ${almalinux_release} = *'kitten'* ]]; then
+          VERSION_MAJOR='10-kitten'
+        else
+          VERSION_MAJOR=$(cut -d '.' -f 1 <<< "$release")
+        fi
+        echo "VERSION_MAJOR=${VERSION_MAJOR}" >> "$GITHUB_ENV"
 
     - name: Install dependencies (${{ env.VERSION_MAJOR }})
       run: |
@@ -144,10 +153,15 @@ jobs:
         run: |
           # Minor version for both amd64 and arm64
           for MACHINE in x86_64 aarch64; do
-            release=$(rpm -q --qf="%{VERSION}\n" https://repo.almalinux.org/almalinux/almalinux-release-latest-${{ matrix.VERSION_MAJOR }}.${MACHINE}.rpm 2>/dev/null)
-            VERSION_MINOR=$(cut -d '.' -f 2 <<< "$release")
-            [ "x${VERSION_MINOR}" != "x" ] && echo "VERSION_MINOR_${MACHINE}=${VERSION_MINOR}" >> "$GITHUB_ENV"
-             unset VERSION_MINOR
+            VERSION_MINOR=
+            release=${{ matrix.VERSION_MAJOR }}
+            if [[ "${{ matrix.VERSION_MAJOR }}" != *'kitten'* ]]; then
+              release=$(rpm -q --qf="%{VERSION}\n" https://repo.almalinux.org/almalinux/almalinux-release-latest-${{ matrix.VERSION_MAJOR }}.${MACHINE}.rpm 2>/dev/null)
+              VERSION_MINOR=.$(cut -d '.' -f 2 <<< "$release")
+            fi
+            echo "VERSION_MINOR_${MACHINE}=${VERSION_MINOR}" >> "$GITHUB_ENV"
+            echo "[Debug] MACHINE=${MACHINE} release=$release VERSION_MINOR=${VERSION_MINOR}"
+            unset VERSION_MINOR release
           done
 
       - name: Login to registry (docker)
@@ -164,9 +178,9 @@ jobs:
 
           amd64_exists=0
           arm64_exists=0
-          docker manifest inspect ${IMAGE_DEST}:${{ matrix.VERSION_MAJOR }}.${{ env.VERSION_MINOR_x86_64 }}-${{ env.DATE_STAMP }}-amd64 >/dev/null 2>&1 \
+          docker manifest inspect ${IMAGE_DEST}:${{ matrix.VERSION_MAJOR }}${{ env.VERSION_MINOR_x86_64 }}-${{ env.DATE_STAMP }}-amd64 >/dev/null 2>&1 \
             || amd64_exists=$?
-          docker manifest inspect ${IMAGE_DEST}:${{ matrix.VERSION_MAJOR }}.${{ env.VERSION_MINOR_aarch64 }}-${{ env.DATE_STAMP }}-arm64 >/dev/null 2>&1 \
+          docker manifest inspect ${IMAGE_DEST}:${{ matrix.VERSION_MAJOR }}${{ env.VERSION_MINOR_aarch64 }}-${{ env.DATE_STAMP }}-arm64 >/dev/null 2>&1 \
             || arm64_exists=$?
           [ $amd64_exists -ne 0 -o $arm64_exists -ne 0 ] && exit 0
 
@@ -175,11 +189,13 @@ jobs:
           [ "${{ env.VERSION_MINOR_x86_64 }}" != "${{ env.VERSION_MINOR_aarch64 }}" ] && exit 0
 
           # Loop over need tags: latest, VERSION_MAJOR, VERSION_MAJOR.VERSION_MINOR, VERSION_MAJOR.VERSION_MINOR-DATE_STAMP
-          for tag in latest ${{ matrix.VERSION_MAJOR }} ${{ matrix.VERSION_MAJOR }}.${VERSION_MINOR} ${{ matrix.VERSION_MAJOR }}.${VERSION_MINOR}-${{ env.DATE_STAMP }}; do
+          tags="latest ${{ matrix.VERSION_MAJOR }} ${{ matrix.VERSION_MAJOR }}${VERSION_MINOR}-${{ env.DATE_STAMP }}"
+          [[ ${{ matrix.VERSION_MAJOR }} != *'kitten'* ]] && tags="${tags} ${{ matrix.VERSION_MAJOR }}${VERSION_MINOR}"
+          for tag in $tags; do
               [ ${{ matrix.VERSION_MAJOR }} != ${{ env.LATEST_MAJOR }} -a "${tag}" = "latest" ] && continue
               docker manifest create ${IMAGE_DEST}:${tag} \
-                  ${IMAGE_DEST}:${{ matrix.VERSION_MAJOR }}.${VERSION_MINOR}-${{ env.DATE_STAMP }}-amd64 \
-                  ${IMAGE_DEST}:${{ matrix.VERSION_MAJOR }}.${VERSION_MINOR}-${{ env.DATE_STAMP }}-arm64
+                  ${IMAGE_DEST}:${{ matrix.VERSION_MAJOR }}${VERSION_MINOR}-${{ env.DATE_STAMP }}-amd64 \
+                  ${IMAGE_DEST}:${{ matrix.VERSION_MAJOR }}${VERSION_MINOR}-${{ env.DATE_STAMP }}-arm64
 
               docker manifest inspect ${IMAGE_DEST}:${tag}
 

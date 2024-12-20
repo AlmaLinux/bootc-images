@@ -28,9 +28,12 @@ runs:
         echo "MACHINE=${MACHINE}" >> "$GITHUB_ENV"
 
         # Minor version
-        release=$(rpm -q --qf="%{VERSION}\n" https://repo.almalinux.org/almalinux/almalinux-release-latest-${{ inputs.VERSION_MAJOR }}.${MACHINE}.rpm 2>/dev/null)
-        VERSION_MINOR=$(cut -d '.' -f 2 <<< "$release")
-        [ "x${VERSION_MINOR}" != "x" ] && echo "VERSION_MINOR=${VERSION_MINOR}" >> "$GITHUB_ENV"
+        VERSION_MINOR=
+        if [[ ${{ inputs.VERSION_MAJOR }} != *'kitten'* ]]; then
+          release=$(rpm -q --qf="%{VERSION}\n" https://repo.almalinux.org/almalinux/almalinux-release-latest-${{ inputs.VERSION_MAJOR }}.${MACHINE}.rpm 2>/dev/null)
+          VERSION_MINOR=.$(cut -d '.' -f 2 <<< "$release")
+        fi
+        echo "VERSION_MINOR=${VERSION_MINOR}" >> "$GITHUB_ENV"
 
         # quay.io/almalinuxorg/almalinux-bootc
         IMAGE_DEST=${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -79,4 +82,4 @@ runs:
       run: |
         # Tag: VERSION_MAJOR.VERSION_MINOR-DATE_STAMP-ARCH
         podman push ${{ env.IMAGE_NAME }} \
-          docker://${IMAGE_DEST}:${{ inputs.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}-${{ inputs.DATE_STAMP }}-${{ env.ARCH }}
+          docker://${IMAGE_DEST}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}-${{ inputs.DATE_STAMP }}-${{ env.ARCH }}
