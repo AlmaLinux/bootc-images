@@ -138,7 +138,10 @@ jobs:
     - name: Install dependencies (${{ env.VERSION_MAJOR }})
       run: |
         sudo yum -y -q update
-        sudo yum -y -q install podman git
+        # TODO: with newer version of podman 9-th build fails with:
+        #   [3/3] STEP 1/2: FROM oci-archive:./out.ociarchive
+        #   Error: creating build container: creating temp directory: archive file not found: "/actions-runner/_work/bootc-images/bootc-images/out.ociarchive"
+        sudo yum -y -q install ${{ env.VERSION_MAJOR == '9' && 'podman-5.2.2-11.el9_5' || 'podman' }} git
 
     - uses: actions/checkout@v4
       with:
