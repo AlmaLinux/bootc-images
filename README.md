@@ -33,5 +33,7 @@ podman build --security-opt=label=disable --cap-add=all \
 
 *WARNING: This release should not be used for production installations.*
 
+```sh
 podman build --security-opt=label=disable --cap-add=all \
   --device /dev/fuse -t localhost/almalinux-10-kitten-bootc -f 10-kitten/Containerfile .
+```
