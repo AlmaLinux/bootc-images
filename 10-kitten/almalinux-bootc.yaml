@@ -1,15 +1,7 @@
-releasever: 10
-
-repos:
-  - baseos
-  - appstream
-
-variables:
-  distro: "almalinux10"
-
 packages:
-  #- almalinux-repos
-  - almalinux-kitten-repos
+  # EL compat
+  - dnf-yum
+  - dnf-bootc
 
 postprocess:
   - |
@@ -21,5 +13,4 @@ postprocess:
     EOF
 
 include:
-  - fedora-bootc/tier-1/kernel.yaml
-  - fedora-bootc/tier-1/manifest.yaml
+  - standard/manifest.yaml
