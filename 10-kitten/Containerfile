@@ -1,35 +1,24 @@
-FROM docker.io/library/almalinux:10-kitten as repos
+FROM quay.io/almalinuxorg/10-kitten-base:10-kitten as repos
 FROM quay.io/centos-bootc/centos-bootc:stream10 as builder
 
-COPY 10-kitten/almalinux-bootc.yaml /usr/share/doc/bootc-base-imagectl/manifests/
+RUN rm -rf /etc/yum.repos.d/*
 
-RUN --mount=type=bind,rw,from=repos,src=/,dst=/repos \
-    /usr/libexec/bootc-base-imagectl build-rootfs \
-        --reinject \
-        --manifest=almalinux-bootc \
-        /repos \
-        /target-rootfs
+COPY --from=repos /etc/yum.repos.d/*.repo /etc/yum.repos.d/
 
-RUN --mount=type=bind,rw,src=.,dst=/buildcontext,bind-propagation=shared \
-    rpm-ostree experimental compose build-chunked-oci \
-        --bootc \
-        --format-version=1 \
-        --rootfs /target-rootfs \
-        --output oci-archive:/buildcontext/out.ociarchive
+COPY --from=repos /etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-10 /etc/pki/rpm-gpg
 
-FROM oci-archive:./out.ociarchive
+COPY 10-kitten/almalinux-10-kitten.yaml /usr/share/doc/bootc-base-imagectl/manifests/
 
-RUN --mount=type=bind,from=builder,src=.,target=/var/tmp \
-    --mount=type=bind,rw=true,src=.,dst=/buildcontext,bind-propagation=shared \
-    rm /buildcontext/out.ociarchive
+RUN /usr/libexec/bootc-base-imagectl build-rootfs --manifest=almalinux-10-kitten /target-rootfs
 
-# EL compat labels
-LABEL containers.bootc="1" \
-      ostree.bootable="1" \
-      org.opencontainers.image.version="10" \
-      redhat.id="almalinux" \
-      redhat.version-id="10"
-ENV container=oci
+###
+
+FROM scratch
+
+COPY --from=builder /target-rootfs/ /
+
+LABEL containers.bootc 1
+LABEL ostree.bootable 1
 
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]

@@ -1,15 +1,30 @@
+releasever: 10
+
+repos:
+  - baseos
+  - appstream
+
+variables:
+  distro: "almalinux10"
+
 packages:
-  # EL compat
-  - dnf-yum
-  - dnf-bootc
+  - almalinux-kitten-repos
 
 postprocess:
   - |
     #!/usr/bin/env bash
+
+    set -euo pipefail
+
     mkdir -p /usr/lib/bootc/install/
     cat > /usr/lib/bootc/install/20-rhel.toml << EOF
     [install]
     root-fs-type = "xfs"
+
+    dnf clean all
+    rm /var/{log,cache,lib}/* -rf
+
+    bootc container lint
     EOF
 
 include:
