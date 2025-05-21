@@ -76,44 +76,10 @@ jobs:
         REGISTRY_USER:  ${{ secrets.REGISTRY_USER }}
         REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 
-  start-arm64-runner:
-    name: arm64 self-hosted runner
-    timeout-minutes: 10              # normally it only takes 1-2 minutes
-    runs-on: ubuntu-24.04
-    needs: [set-versions-matrix]
-    strategy:
-      fail-fast: false
-      matrix:
-        VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
-
-    steps:
-    - name: Setup and start the runner
-      id: start-ec2-runner
-      uses: NextChapterSoftware/ec2-action-builder@v1.7
-      with:
-        github_token: ${{ secrets.GIT_HUB_TOKEN }}
-        aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws_region: ${{ secrets.AWS_REGION }}
-        ec2_ami_id: ${{ secrets[format('EC2_AMI_ID_AL{0}', ( matrix.VERSION_MAJOR == '10-kitten' && '10_KITTEN' || matrix.VERSION_MAJOR))] }}
-        ec2_subnet_id: ${{ secrets.EC2_SUBNET_ID}}
-        ec2_security_group_id: ${{ secrets.EC2_SECURITY_GROUP_ID }}
-
-        ec2_instance_type: t4g.medium       # 2 vCPU and 4 GiM Memory
-        ec2_root_disk_size_gb: "16"         # override default size which is too small for images
-        ec2_root_disk_ebs_class: "gp3"      # use faster and cheeper storage instead of default 'gp2'
-        ec2_instance_ttl: 60                # Optional (default is 60 minutes)
-        ec2_spot_instance_strategy: None    # Other options are: SpotOnly, BestEffort, MaxPerformance
-        ec2_instance_tags: >                # Required for IAM role resource permission scoping
-          [
-              {"Key": "Project", "Value": "GitHub Actions Self-hosted Runners"}
-          ]
-
   build-arm64:
-    if: ${{ always() && contains(join(needs.start-arm64-runner.result, ','), 'success') }}
     name: arm64 image
-    runs-on: ${{ github.run_id }}
-    needs: [set-versions-matrix, start-arm64-runner]
+    runs-on: ubuntu-24.04-arm
+    needs: [set-versions-matrix]
     strategy:
       fail-fast: false
       matrix:
@@ -173,7 +139,7 @@ jobs:
   push-manifest:
     if: ${{ always() && contains(join(needs.*.result, ','), 'success') }}
     name: Push manifest
-    needs: [set-versions-matrix, build-amd64, start-arm64-runner, build-arm64]
+    needs: [set-versions-matrix, build-amd64, build-arm64]
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
