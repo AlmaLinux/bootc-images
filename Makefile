@@ -1,11 +1,8 @@
 PODMAN = sudo podman
 
 IMAGE_NAME = almalinux-bootc
-# ${{ env.IMAGE_NAME }}
 VERSION_MAJOR = 10
-# ${{ inputs.VERSION_MAJOR }}
 PLATFORM = linux/amd64
-# ${{ env.PLATFORM }}
 
 image:
 	$(PODMAN) build \

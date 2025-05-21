@@ -2,34 +2,19 @@ FROM quay.io/almalinuxorg/9-base:9 as repos
 FROM quay.io/centos-bootc/centos-bootc:stream10 as builder
 
 RUN rm -rf /etc/yum.repos.d/*
-COPY --from=repos /etc/yum.repos.d/*.repo /etc/yum.repos.d/
-RUN find /etc/yum.repos.d -type f -print0 | xargs -0 sed -i 's/$releasever/9/g'
 
+COPY --from=repos /etc/yum.repos.d/*.repo /etc/yum.repos.d/
 COPY --from=repos /etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-9 /etc/pki/rpm-gpg
 
-RUN /usr/libexec/bootc-base-imagectl build-rootfs --manifest=standard/manifest /target-rootfs
+COPY 9/almalinux-9.yaml /usr/share/doc/bootc-base-imagectl/manifests/
 
+RUN /usr/libexec/bootc-base-imagectl build-rootfs --manifest=almalinux-9 /target-rootfs
+
+###
 
 FROM scratch
 
 COPY --from=builder /target-rootfs/ /
-
-RUN <<EOT
-
-set -euo pipefail
-
-mkdir -p /usr/lib/bootc/install/
-cat > /usr/lib/bootc/install/20-rhel.toml << EOF
-    [install]
-    root-fs-type = "xfs"
-EOF
-
-dnf clean all
-rm /var/{log,cache,lib}/* -rf
-
-bootc container lint
-
-EOT
 
 LABEL containers.bootc 1
 LABEL ostree.bootable 1
