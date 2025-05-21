@@ -1,27 +1,24 @@
-FROM quay.io/almalinuxautobot/almalinux:10 as repos
-FROM quay.io/centos-bootc/bootc-image-builder:latest as builder
+FROM quay.io/almalinuxorg/10-base:10 as repos
+FROM quay.io/centos-bootc/centos-bootc:stream10 as builder
 
+RUN rm -rf /etc/yum.repos.d/*
 
-COPY --from=repos /etc/dnf/vars /etc/dnf/vars
+COPY --from=repos /etc/yum.repos.d/*.repo /etc/yum.repos.d/
 
-COPY 10 /src
-COPY fedora-bootc /src/fedora-bootc
-WORKDIR /src
-
-COPY --from=repos /etc/yum.repos.d/*.repo /src
 COPY --from=repos /etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-10 /etc/pki/rpm-gpg
 
-RUN --mount=type=cache,target=/workdir \
-    --mount=type=bind,rw=true,src=.,dst=/buildcontext,bind-propagation=shared \
-    rpm-ostree compose image \
-        --image-config almalinux-bootc-config.json \
-        --cachedir=/workdir \
-        --format=ociarchive \
-        --initialize almalinux-bootc.yaml \
-        /buildcontext/out.ociarchive
+COPY 10/almalinux-10.yaml /usr/share/doc/bootc-base-imagectl/manifests/
 
-FROM oci-archive:./out.ociarchive
+RUN /usr/libexec/bootc-base-imagectl build-rootfs --manifest=almalinux-10 /target-rootfs
 
-RUN --mount=type=bind,from=builder,src=.,target=/var/tmp \
-    --mount=type=bind,rw=true,src=.,dst=/buildcontext,bind-propagation=shared \
-    rm /buildcontext/out.ociarchive
+###
+
+FROM scratch
+
+COPY --from=builder /target-rootfs/ /
+
+LABEL containers.bootc 1
+LABEL ostree.bootable 1
+
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]
