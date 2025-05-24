@@ -52,7 +52,7 @@ runs:
         #   125 - tag/platform not found
         #   127 - command not found
         res=0
-        podman run --quiet --rm ${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }} dnf check-update || res=$?
+        sudo podman run --quiet --rm ${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }} dnf check-update || res=$?
         echo "res=${res}" >> "$GITHUB_ENV"
         echo "Exit code: '$res'"
 
@@ -60,29 +60,25 @@ runs:
       if: ${{ env.res != 0 }}
       shell: bash
       run: |
-        podman build \
-          --platform=${{ env.PLATFORM }} \
-          --security-opt=label=disable \
-          --cap-add=all \
-          --device /dev/fuse \
-          -t ${{ env.IMAGE_NAME }} \
-          -f ${{ inputs.VERSION_MAJOR }}/Containerfile \
-        .
+        make image \
+          PLATFORM=${{ env.PLATFORM }} \
+          IMAGE_NAME=${{ env.IMAGE_NAME }} \
+          VERSION_MAJOR=${{ inputs.VERSION_MAJOR }}
 
     - name: Run Image
       if: ${{ env.res != 0 }}
       shell: bash
-      run: podman run --rm -ti ${{ env.IMAGE_NAME }} bootc --version
+      run: sudo podman run --rm -ti ${{ env.IMAGE_NAME }} bootc --version
 
     - name: Log in to registry
       if: ${{ env.res != 0 }}
       shell: bash
-      run: podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
+      run: sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
 
     - name: Push to registry
       if: ${{ env.res != 0 }}
       shell: bash
       run: |
         # Tag: VERSION_MAJOR.VERSION_MINOR-DATE_STAMP-ARCH
-        podman push ${{ env.IMAGE_NAME }} \
+        sudo podman push ${{ env.IMAGE_NAME }} \
           docker://${IMAGE_DEST}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}-${{ inputs.DATE_STAMP }}-${{ env.ARCH }}

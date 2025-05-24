@@ -1,9 +1,0 @@
-{
-    "Labels": {
-        "containers.bootc": "1",
-        "bootc.diskimage-builder": "quay.io/centos-bootc/bootc-image-builder",
-        "redhat.id": "almalinux",
-        "redhat.version-id": "10.0"
-    },
-    "StopSignal": "SIGRTMIN+3"
-}

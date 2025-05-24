@@ -1,11 +1,11 @@
-releasever: 9
+releasever: 10
 
 repos:
   - baseos
   - appstream
 
 variables:
-  distro: "almalinux9"
+  distro: "almalinux10"
 
 packages:
   - almalinux-repos
@@ -13,12 +13,19 @@ packages:
 postprocess:
   - |
     #!/usr/bin/env bash
+
+    set -euo pipefail
+
     mkdir -p /usr/lib/bootc/install/
     cat > /usr/lib/bootc/install/20-rhel.toml << EOF
     [install]
     root-fs-type = "xfs"
+
+    dnf clean all
+    rm /var/{log,cache,lib}/* -rf
+
+    bootc container lint
     EOF
 
 include:
-  - fedora-bootc/tier-1/kernel.yaml
-  - fedora-bootc/tier-1/manifest.yaml
+  - standard/manifest.yaml
