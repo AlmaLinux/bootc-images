@@ -21,6 +21,7 @@ postprocess:
     [install]
     root-fs-type = "xfs"
     
+    
     dnf clean all
     rm /var/{log,cache,lib}/* -rf
 
