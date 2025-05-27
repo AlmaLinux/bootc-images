@@ -8,20 +8,25 @@ variables:
   distro: "almalinux10"
 
 packages:
-  - almalinux-kitten-repos
+  - almalinux-repos
 
 postprocess:
   - |
     #!/usr/bin/env bash
+
+    set -euo pipefail
+
     mkdir -p /usr/lib/bootc/install/
     cat > /usr/lib/bootc/install/20-rhel.toml << EOF
     [install]
     root-fs-type = "xfs"
     EOF
-  - |
-    #!/usr/bin/env bash
-    set -xeuo pipefail
-    systemctl preset-all
+    
+    dnf clean all
+    rm /var/{log,cache,lib}/* -rf
+
+    bootc container lint
+    
 
 include:
   - standard/manifest.yaml

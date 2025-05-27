@@ -5,7 +5,7 @@ on:
       RELEASE:
         description: 'AlmaLinux release'
         required: true
-        default: '9'
+        default: '10'
         type: choice
         options:
           - '10-kitten'
@@ -23,7 +23,7 @@ on:
 
 
 env:
-  LATEST_MAJOR: 9
+  LATEST_MAJOR: 10
   IMAGE_NAME: almalinux-bootc
   VERSIONS_LIST: '"9", "10-kitten", "10"'
 

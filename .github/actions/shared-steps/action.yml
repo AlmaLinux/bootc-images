@@ -1,15 +1,22 @@
 name: "Build and Push"
+description: "Build and push AlmaLinux bootc image to registry"
 
 inputs:
   VERSION_MAJOR:
+    description: "Major version of AlmaLinux (e.g. 8, 9, 10)"
     required: true
   DATE_STAMP:
+    description: "Date stamp for the image tag (e.g. 20231001)"
     required: true
   IMAGE_REGISTRY:
+    description: "Docker registry to push the image to (e.g. quay.io/almalinuxorg)"
+    default: "quay.io/almalinuxorg"
     required: true
   REGISTRY_USER:
+    description: "Username for the Docker registry"
     required: true
   REGISTRY_PASSWORD:
+    description: "Password for the Docker registry"
     required: true
 runs:
   using: "composite"
