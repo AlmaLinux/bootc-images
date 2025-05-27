@@ -22,9 +22,6 @@ postprocess:
     #!/usr/bin/env bash
     set -xeuo pipefail
     systemctl preset-all
-    dnf clean all
-    rm /var/{log,cache,lib}/* -rf
-    bootc container lint
 
 include:
   - standard/manifest.yaml
