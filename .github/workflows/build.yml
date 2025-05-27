@@ -8,13 +8,19 @@ on:
         default: '9'
         type: choice
         options:
-          - 10-kitten
-          - 10
-          - 9
-
+          - '10-kitten'
+          - '10'
+          - '9'
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
   schedule:
     # run every day at 03:00 UTC
     - cron:  '00 03 * * *'
+
 
 env:
   LATEST_MAJOR: 9
