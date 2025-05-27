@@ -27,6 +27,5 @@ postprocess:
     bootc container lint
     EOF
     
-
 include:
   - standard/manifest.yaml
