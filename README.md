@@ -29,6 +29,13 @@ podman build --security-opt=label=disable --cap-add=all \
   --device /dev/fuse -t localhost/almalinux-9-bootc -f 9/Containerfile .
 ```
 
+### AlmaLinux 10
+
+```sh
+podman build --security-opt=label=disable --cap-add=all \
+  --device /dev/fuse -t localhost/almalinux-10-bootc -f 10/Containerfile .
+```
+
 ### AlmaLinux 10 Kitten
 
 *WARNING: This release should not be used for production installations.*
