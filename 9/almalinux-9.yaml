@@ -20,12 +20,13 @@ postprocess:
     cat > /usr/lib/bootc/install/20-rhel.toml << EOF
     [install]
     root-fs-type = "xfs"
-
+    EOF
+    
     dnf clean all
     rm /var/{log,cache,lib}/* -rf
 
     bootc container lint
-    EOF
+    
 
 include:
   - standard/manifest.yaml

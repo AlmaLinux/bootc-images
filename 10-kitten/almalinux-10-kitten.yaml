@@ -13,19 +13,15 @@ packages:
 postprocess:
   - |
     #!/usr/bin/env bash
-
-    set -euo pipefail
-
     mkdir -p /usr/lib/bootc/install/
     cat > /usr/lib/bootc/install/20-rhel.toml << EOF
     [install]
     root-fs-type = "xfs"
-
-    dnf clean all
-    rm /var/{log,cache,lib}/* -rf
-
-    bootc container lint
     EOF
+  - |
+    #!/usr/bin/env bash
+    set -xeuo pipefail
+    systemctl preset-all
 
 include:
   - standard/manifest.yaml
