@@ -57,7 +57,7 @@ runs:
         echo "Exit code: '$res'"
 
     - name: Build image
-      if: ${{ env.res != 0 }}
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: |
         make image \
@@ -66,17 +66,17 @@ runs:
           VERSION_MAJOR=${{ inputs.VERSION_MAJOR }}
 
     - name: Run Image
-      if: ${{ env.res != 0 }}
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: sudo podman run --rm -ti ${{ env.IMAGE_NAME }} bootc --version
 
     - name: Log in to registry
-      if: ${{ env.res != 0 }}
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
 
     - name: Push to registry
-      if: ${{ env.res != 0 }}
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: |
         # Tag: VERSION_MAJOR.VERSION_MINOR-DATE_STAMP-ARCH
