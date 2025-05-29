@@ -7,6 +7,8 @@ inputs:
     required: true
   IMAGE_REGISTRY:
     required: true
+  SPECIALIZATION:
+    required: true
   REGISTRY_USER:
     required: true
   REGISTRY_PASSWORD:
@@ -26,12 +28,27 @@ runs:
         ARCH=${{ matrix.ARCH }}
         echo "CLEAN_ARCH=${ARCH//\//_}" >> "$GITHUB_ENV"
 
+    - name: Generate Suffix
+      id: suffix
+      shell: bash
+      run: |
+        if [ 'x${{ inputs.SPECIALIZATION }}' == 'xgeneral' ]; then
+          echo "suffix=" >> $GITHUB_OUTPUT
+          echo "clean_suffix=" >> $GITHUB_OUTPUT
+        else
+          echo "suffix=-${{ inputs.SPECIALIZATION }}" >> $GITHUB_OUTPUT
+          echo "clean_suffix=_${{ inputs.SPECIALIZATION }}" >> $GITHUB_OUTPUT
+        fi
+
     - name: Log in to registry
+      if: github.event_name != 'pull_request'
       shell: bash
       run: sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
 
     - name: Check update
       shell: bash
+      env:
+        SUFFIX: ${{ steps.suffix.outputs.suffix }}
       run: |
         # 'dnf check-update'
         # exit codes:
@@ -40,7 +57,10 @@ runs:
         #   125 - tag/platform not found
         #   127 - command not found
         res=0
-        sudo podman run ${{ env.VARIANT }} --quiet --rm ${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }} dnf check-update || res=$?
+        if [ "${{ github.event_name }}" != "pull_request" ]; then
+          exit 100
+        fi
+        sudo podman run ${{ env.VARIANT }} --quiet --rm ${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.SUFFIX }} dnf check-update || res=$?
         echo "res=${res}" >> "$GITHUB_ENV"
         echo "Exit code: '$res'"
 
@@ -86,7 +106,8 @@ runs:
           PLATFORM=${{ env.PLATFORM }} \
           LABELS="${ALL_LABELS}" \
           IMAGE_NAME=${{ env.IMAGE_NAME }} \
-          VERSION_MAJOR=${{ inputs.VERSION_MAJOR }}
+          VERSION_MAJOR=${{ inputs.VERSION_MAJOR }} \
+          SPECIALIZATION=${{ inputs.SPECIALIZATION }}
 
         echo "image-id=$(cat /tmp/image-id)" >> $GITHUB_OUTPUT
 
@@ -100,6 +121,22 @@ runs:
           IMAGE_NAME=${{ env.IMAGE_NAME }}
 
         echo "image-id=sha256:$(sudo podman image inspect ${{ env.IMAGE_NAME }} -f "{{.Id}}")" >> $GITHUB_OUTPUT
+
+    - name: Build Image Tars
+      id: tars
+      if: github.event_name == 'pull_request'
+      shell: bash
+      env:
+        IMAGE_ID: ${{ steps.rechunk.outputs.image-id }}
+        SUFFIX: ${{ steps.suffix.outputs.suffix }}
+      run: |
+        sudo podman tag \
+          ${{ env.IMAGE_ID }} \
+          localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} && \
+        sudo podman save \
+          ${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} > \
+          /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.tar && \
+        sudo gzip /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.tar
 
     - name: Run Image
       id: run
@@ -120,16 +157,17 @@ runs:
 
     - name: Push to registry
       id: push
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      if: ${{ (env.res != 0 || github.event_name == 'workflow_dispatch') && github.event_name != 'pull_request' }}
       env:
         IMAGE_ID: ${{ steps.rechunk.outputs.image-id }}
         VERSION: ${{ steps.run.outputs.version-id }}
+        SUFFIX: ${{ steps.suffix.outputs.suffix }}
       shell: bash
       run: |
         # The push fails for unknown reasons sometimes, so we'll retry it a few times
         for i in {1..5}; do
           sudo podman push --digestfile=/tmp/digestfile ${{ env.IMAGE_ID }} \
-            docker://${IMAGE_DEST}:${{ env.VERSION }}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} && break || sleep $((10*i))
+            docker://${IMAGE_DEST}:${{ env.VERSION }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} && break || sleep $((10*i))
         done
         [ -f /tmp/digestfile ] || exit 1
         echo "digest=$(cat /tmp/digestfile)" >> $GITHUB_OUTPUT
@@ -138,6 +176,8 @@ runs:
     - name: Create Job Outputs
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
+      env:
+        CLEAN_SUFFIX: ${{ steps.suffix.outputs.clean_suffix }}
       run: |
         mkdir -p /tmp/outputs/digests
 
@@ -150,15 +190,28 @@ runs:
           --arg vendor "${{ steps.run.outputs.vendor }}" \
           --arg image_id "${{ steps.rechunk.outputs.image-id }}" \
           '{($platform): {digest: $digest, id: $id, version: $version, major: $major, long_version: $long_version, vendor: $vendor, image_id: $image_id}}' \
-          > /tmp/outputs/digests/${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_${{ env.CLEAN_ARCH }}.json
+          > /tmp/outputs/digests/${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}${{ env.CLEAN_SUFFIX }}_${{ env.CLEAN_ARCH }}.json
 
-        cat /tmp/outputs/digests/${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_${{ env.CLEAN_ARCH }}.json
+        cat /tmp/outputs/digests/${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}${{ env.CLEAN_SUFFIX }}_${{ env.CLEAN_ARCH }}.json
+
+    - name: Upload Container Image Artifacts
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      if: ${{ github.event_name == 'pull_request' }}
+      env:
+        SUFFIX: ${{ steps.suffix.outputs.suffix }}
+      with:
+        name: image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.tar.gz
+        path: /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.tar.gz
+        retention-days: 1
+        if-no-files-found: error
 
     - name: Upload Output Artifacts
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      env:
+        CLEAN_SUFFIX: ${{ steps.suffix.outputs.clean_suffix }}
       with:
-        name: ${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_${{ env.CLEAN_ARCH }}
+        name: ${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}${{ env.CLEAN_SUFFIX }}_${{ env.CLEAN_ARCH }}
         retention-days: 1
         if-no-files-found: error
         path: |

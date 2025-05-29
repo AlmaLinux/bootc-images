@@ -3,7 +3,14 @@ PODMAN = sudo podman
 IMAGE_NAME = almalinux-bootc
 VERSION_MAJOR = 10
 PLATFORM = linux/amd64
+SPECIALIZATION = general
 LABELS ?=
+
+ifeq ($(SPECIALIZATION), general)
+    SUFFIX =
+else
+    SUFFIX = -$(SPECIALIZATION)
+endif
 
 .ONESHELL:
 .PHONY: all
@@ -19,7 +26,7 @@ image:
 		--iidfile /tmp/image-id \
 		$(LABELS) \
 		-t $(IMAGE_NAME) \
-		-f $(VERSION_MAJOR)/Containerfile \
+		-f $(VERSION_MAJOR)$(SUFFIX)/Containerfile \
 		.
 
 rechunk:

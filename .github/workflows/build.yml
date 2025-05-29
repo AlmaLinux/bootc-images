@@ -1,5 +1,7 @@
 name: Build amd64 and arm64
 on:
+  pull_request:
+    types: [synchronize, opened, reopened]
   workflow_dispatch:
     inputs:
       RELEASE:
@@ -21,6 +23,7 @@ env:
   LATEST_MAJOR: 9
   IMAGE_NAME: almalinux-bootc
   VERSIONS_LIST: '"9", "10-kitten", "10"'
+  SPECIALIZATION_LIST: '"general", "rpi"'
   CHAT_CHANNEL: sigcloud
 
 jobs:
@@ -29,6 +32,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      specializations: ${{ steps.set-specializations.outputs.specializations }}
       date_stamp: ${{ steps.date-stamp.outputs.date_stamp }}
     steps:
       - name: Set matrix
@@ -36,6 +40,9 @@ jobs:
         run: |
           # Format json for versions matrix
           case ${{ github.event_name }} in
+            pull_request)
+              echo "matrix=$(jq -c <<< '[${{ env.VERSIONS_LIST }}]')" >> $GITHUB_OUTPUT
+              ;;
             workflow_dispatch)
               if [[ "${{ inputs.RELEASE }}" == "ALL" ]]; then
                 echo "matrix=$(jq -c <<< '[${{ env.VERSIONS_LIST }}]')" >> $GITHUB_OUTPUT
@@ -47,6 +54,12 @@ jobs:
               echo "matrix=$(jq -c <<< '[${{ env.VERSIONS_LIST }}]')" >> $GITHUB_OUTPUT
               ;;
           esac
+
+      - name: Set specializations
+        id: set-specializations
+        run: |
+          # Format json for specializations
+          echo "specializations=$(jq -c <<< '[${{ env.SPECIALIZATION_LIST }}]')" >> $GITHUB_OUTPUT
 
       - name: Date stamp
         id: date-stamp
@@ -64,9 +77,17 @@ jobs:
       matrix:
         VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
         ARCH: [amd64, arm64, amd64/v2]
+        SPECIALIZATION: ${{ fromJSON(needs.set-versions-matrix.outputs.specializations) }}
         exclude:
           - VERSION_MAJOR: 9
             ARCH: amd64/v2
+          - VERSION_MAJOR: 9
+            ARCH: amd64
+            SPECIALIZATION: rpi
+          - VERSION_MAJOR: 10
+            SPECIALIZATION: rpi
+          - VERSION_MAJOR: 10-kitten
+            SPECIALIZATION: rpi
 
     env:
       PLATFORM: linux/${{ matrix.ARCH }}
@@ -83,11 +104,12 @@ jobs:
         VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
         DATE_STAMP: ${{ env.DATE_STAMP }}
         IMAGE_REGISTRY: ${{ secrets.IMAGE_REGISTRY }}
+        SPECIALIZATION: ${{ matrix.SPECIALIZATION }}
         REGISTRY_USER:  ${{ secrets.REGISTRY_USER }}
         REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 
   push-manifest:
-    if: ${{ always() && contains(join(needs.*.result, ','), 'success') }}
+    if: ${{ always() && contains(join(needs.*.result, ','), 'success') && github.event_name != 'pull_request' }}
     name: Push manifest
     needs: [set-versions-matrix, build]
     runs-on: ubuntu-24.04
