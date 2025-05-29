@@ -68,15 +68,15 @@ runs:
     - name: Run Image
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
-      run: sudo podman run --rm -ti ${{ env.IMAGE_NAME }} bootc --version
+      run: sudo podman run --rm -ti ${{ env.IMAGE_NAME }} bootc container lint --fatal-warnings
 
     - name: Log in to registry
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      if: ${{ (env.res != 0 || github.event_name == 'workflow_dispatch') && github.event_name != 'pull_request' }}
       shell: bash
       run: sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
 
     - name: Push to registry
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      if: ${{ (env.res != 0 || github.event_name == 'workflow_dispatch') && github.event_name != 'pull_request' }}
       shell: bash
       run: |
         # Tag: VERSION_MAJOR.VERSION_MINOR-DATE_STAMP-ARCH
