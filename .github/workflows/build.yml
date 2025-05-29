@@ -8,9 +8,10 @@ on:
         default: '9'
         type: choice
         options:
-          - 10-kitten
-          - 10
-          - 9
+          - '10-kitten'
+          - '10'
+          - '9'
+          - 'ALL'
 
   schedule:
     # run every day at 03:00 UTC
@@ -35,7 +36,11 @@ jobs:
           # Format json for versions matrix
           case ${{ github.event_name }} in
             workflow_dispatch)
-              echo "matrix=$(jq -c <<< '["${{ inputs.RELEASE }}"]')" >> $GITHUB_OUTPUT
+              if [[ "${{ inputs.RELEASE }}" == "ALL" ]]; then
+                echo "matrix=$(jq -c <<< '[${{ env.VERSIONS_LIST }}]')" >> $GITHUB_OUTPUT
+              else
+                echo "matrix=$(jq -c <<< '["${{ inputs.RELEASE }}"]')" >> $GITHUB_OUTPUT
+              fi
               ;;
             schedule)
               echo "matrix=$(jq -c <<< '[${{ env.VERSIONS_LIST }}]')" >> $GITHUB_OUTPUT
@@ -123,8 +128,6 @@ jobs:
             release=${{ matrix.VERSION_MAJOR }}
             if [[ "${{ matrix.VERSION_MAJOR }}" != *'kitten'* ]]; then
               almalinux_release=https://repo.almalinux.org/almalinux/almalinux-release-latest-${{ matrix.VERSION_MAJOR }}.${MACHINE}.rpm
-              # TODO: remove when AlmaLinux 10.0 is released
-              [ "${{ matrix.VERSION_MAJOR }}" = "10" ] && almalinux_release=https://vault.almalinux.org/almalinux-release-latest-10-beta.${MACHINE}.rpm
               release=$(rpm -q --qf="%{VERSION}\n" ${almalinux_release} 2>/dev/null)
               VERSION_MINOR=.$(cut -d '.' -f 2 <<< "$release")
             fi

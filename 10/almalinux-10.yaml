@@ -21,12 +21,12 @@ postprocess:
     [install]
     root-fs-type = "xfs"
     EOF
-    
+  - |
+    #!/usr/bin/env bash
+    set -euo pipefail
     dnf clean all
     rm /var/{log,cache,lib}/* -rf
-
-    bootc container lint
-    
+    systemctl preset-all
 
 include:
   - standard/manifest.yaml
