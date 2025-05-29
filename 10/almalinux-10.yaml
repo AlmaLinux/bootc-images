@@ -23,10 +23,10 @@ postprocess:
     EOF
   - |
     #!/usr/bin/env bash
-    set -euo pipefail  
+    set -euo pipefail
     dnf clean all
     rm /var/{log,cache,lib}/* -rf
     systemctl preset-all
-    
+
 include:
   - standard/manifest.yaml
