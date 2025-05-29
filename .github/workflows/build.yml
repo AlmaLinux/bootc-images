@@ -128,8 +128,6 @@ jobs:
             release=${{ matrix.VERSION_MAJOR }}
             if [[ "${{ matrix.VERSION_MAJOR }}" != *'kitten'* ]]; then
               almalinux_release=https://repo.almalinux.org/almalinux/almalinux-release-latest-${{ matrix.VERSION_MAJOR }}.${MACHINE}.rpm
-              # TODO: remove when AlmaLinux 10.0 is released
-              [ "${{ matrix.VERSION_MAJOR }}" = "10" ] && almalinux_release=https://vault.almalinux.org/almalinux-release-latest-10-beta.${MACHINE}.rpm
               release=$(rpm -q --qf="%{VERSION}\n" ${almalinux_release} 2>/dev/null)
               VERSION_MINOR=.$(cut -d '.' -f 2 <<< "$release")
             fi
