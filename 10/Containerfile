@@ -19,6 +19,6 @@ COPY --from=builder /target-rootfs/ /
 
 LABEL containers.bootc 1
 LABEL ostree.bootable 1
-
+RUN bootc container lint --fatal-warnings
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]

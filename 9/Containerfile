@@ -4,6 +4,7 @@ FROM quay.io/centos-bootc/centos-bootc:stream10 as builder
 RUN rm -rf /etc/yum.repos.d/*
 
 COPY --from=repos /etc/yum.repos.d/*.repo /etc/yum.repos.d/
+
 COPY --from=repos /etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-9 /etc/pki/rpm-gpg
 
 COPY 9/almalinux-9.yaml /usr/share/doc/bootc-base-imagectl/manifests/
@@ -18,6 +19,6 @@ COPY --from=builder /target-rootfs/ /
 
 LABEL containers.bootc 1
 LABEL ostree.bootable 1
-
+RUN bootc container lint --fatal-warnings
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]
