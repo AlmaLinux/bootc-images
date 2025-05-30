@@ -64,6 +64,13 @@ runs:
           PLATFORM=${{ env.PLATFORM }} \
           IMAGE_NAME=${{ env.IMAGE_NAME }} \
           VERSION_MAJOR=${{ inputs.VERSION_MAJOR }}
+    
+    - name: rechunk image
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      shell: bash
+      run: |
+        make rechunk \
+          IMAGE_NAME=${{ env.IMAGE_NAME }} 
 
     - name: Run Image
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
