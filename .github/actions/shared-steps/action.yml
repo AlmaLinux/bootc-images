@@ -47,6 +47,14 @@ runs:
           PLATFORM=${{ env.PLATFORM }} \
           IMAGE_NAME=${{ env.IMAGE_NAME }} \
           VERSION_MAJOR=${{ inputs.VERSION_MAJOR }}
+    
+    - name: rechunk image
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      shell: bash
+      run: |
+        make rechunk \
+          PLATFORM=${{ env.PLATFORM }} \
+          IMAGE_NAME=${{ env.IMAGE_NAME }}
 
         echo "build-time=$(date -Iseconds)" >> $GITHUB_OUTPUT
         echo "image-id=$(cat /tmp/image-id)" >> $GITHUB_OUTPUT
