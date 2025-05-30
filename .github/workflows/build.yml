@@ -81,6 +81,34 @@ jobs:
         REGISTRY_USER:  ${{ secrets.REGISTRY_USER }}
         REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 
+  build-amd64-v2:
+    if: ${{ always() && (contains(fromJSON(needs.set-versions-matrix.outputs.matrix), '10') || contains(fromJSON(needs.set-versions-matrix.outputs.matrix), '10-kitten')) }}
+    name: amd64 image
+    runs-on: ubuntu-24.04
+    needs: [set-versions-matrix]
+    strategy:
+      fail-fast: false
+      matrix:
+        VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
+
+    env:
+      PLATFORM: linux/amd64/v2
+      DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+
+    - uses: ./.github/actions/shared-steps
+      name: Build and Push
+      with:
+        VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
+        DATE_STAMP: ${{ env.DATE_STAMP }}
+        IMAGE_REGISTRY: ${{ secrets.IMAGE_REGISTRY }}
+        REGISTRY_USER:  ${{ secrets.REGISTRY_USER }}
+        REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+
   build-arm64:
     name: arm64 image
     runs-on: ubuntu-24.04-arm
