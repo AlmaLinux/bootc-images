@@ -83,13 +83,15 @@ jobs:
 
   build-amd64-v2:
     if: ${{ always() && (contains(fromJSON(needs.set-versions-matrix.outputs.matrix), '10') || contains(fromJSON(needs.set-versions-matrix.outputs.matrix), '10-kitten')) }}
-    name: amd64 image
+    name: amd64-v2 image
     runs-on: ubuntu-24.04
     needs: [set-versions-matrix]
     strategy:
       fail-fast: false
       matrix:
         VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
+        exclude:
+          - VERSION_MAJOR: 9
 
     env:
       PLATFORM: linux/amd64/v2
