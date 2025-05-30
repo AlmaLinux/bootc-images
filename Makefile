@@ -19,8 +19,9 @@ image:
 		.
 
 .PHONY: rechunk
-rechunk: image
+rechunk:
 	$(PODMAN) run \
+        --platform=$(PLATFORM) \
 		--rm --privileged \
         --security-opt=label=disable \
 		-v /var/lib/containers:/var/lib/containers:z \
