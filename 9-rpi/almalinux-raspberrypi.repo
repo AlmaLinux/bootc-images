@@ -1,0 +1,27 @@
+# Raspberry PI repo for AlmaLinux
+
+[raspberrypi]
+name=AlmaLinux $releasever - Raspberry Pi
+mirrorlist=https://mirrors.almalinux.org/mirrorlist/$releasever/raspberrypi
+# baseurl=https://repo.almalinux.org/almalinux/$releasever/raspberrypi/$basearch/os/
+gpgcheck=1
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-9
+
+## Sources
+[raspberrypi-source]
+name=AlmaLinux $releasever - Raspberry Pi Source
+mirrorlist=https://mirrors.almalinux.org/mirrorlist/$releasever/raspberrypi-source
+# baseurl=https://repo.almalinux.org/vault/$releasever/raspberrypi/Source/
+gpgcheck=1
+enabled=0
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-9
+
+## Debug
+[raspberrypi-debuginfo]
+name=AlmaLinux $releasever - Raspberry Pi debuginfo
+mirrorlist=https://mirrors.almalinux.org/mirrorlist/$releasever/raspberrypi-debuginfo
+# baseurl=https://repo.almalinux.org/vault/$releasever/raspberrypi/debug/$basearch/
+gpgcheck=1
+enabled=0
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-9
