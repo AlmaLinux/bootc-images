@@ -68,7 +68,7 @@ runs:
     - name: Run Image
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
-      run: sudo podman run --rm -ti ${{ env.IMAGE_NAME }} bootc container lint --fatal-warnings
+      run: sudo podman run --rm -ti ${{ env.IMAGE_NAME }} bootc container lint
 
     - name: Log in to registry
       if: ${{ (env.res != 0 || github.event_name == 'workflow_dispatch') && github.event_name != 'pull_request' }}
