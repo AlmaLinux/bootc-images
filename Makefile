@@ -21,12 +21,12 @@ image:
 .PHONY: rechunk
 rechunk:
 	$(PODMAN) run \
-        --platform=$(PLATFORM) \
+	        --platform=$(PLATFORM) \
 		--rm --privileged \
-        --security-opt=label=disable \
+	        --security-opt=label=disable \
 		-v /var/lib/containers:/var/lib/containers:z \
 		quay.io/centos-bootc/centos-bootc:stream10 \
 		/usr/libexec/bootc-base-imagectl rechunk \
 		localhost/$(IMAGE_NAME):latest localhost/rechunked-$(IMAGE_NAME):latest && \
-    $(PODMAN) tag localhost/rechunked-$(IMAGE_NAME):latest localhost/$(IMAGE_NAME):latest && \
-    $(PODMAN) rmi localhost/rechunked-$(IMAGE_NAME):latest
+	$(PODMAN) tag localhost/rechunked-$(IMAGE_NAME):latest localhost/$(IMAGE_NAME):latest && \
+	$(PODMAN) rmi localhost/rechunked-$(IMAGE_NAME):latest
