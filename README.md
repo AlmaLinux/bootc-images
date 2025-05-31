@@ -20,7 +20,7 @@
 
 ## Usage
 
-This repo uses make to build the images. The followin example will build the x86_64-v2 variant of AlmaLinux OS Kitten 10.  
+This repo uses make to build the images. The following example will build the x86_64-v2 variant of AlmaLinux OS Kitten 10.  
 
 ```
 make \
