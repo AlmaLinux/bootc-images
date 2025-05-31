@@ -57,6 +57,7 @@ runs:
         echo "Exit code: '$res'"
 
     - name: Build image
+      id: build
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: |
@@ -65,7 +66,10 @@ runs:
           IMAGE_NAME=${{ env.IMAGE_NAME }} \
           VERSION_MAJOR=${{ inputs.VERSION_MAJOR }}
 
+        echo "build-time=$(date -Iseconds)" >> $GITHUB_OUTPUT
+
     - name: Run Image
+      id: run
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: sudo podman run --rm -ti ${{ env.IMAGE_NAME }} bootc container lint
