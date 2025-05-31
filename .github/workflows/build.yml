@@ -219,7 +219,7 @@ jobs:
           echo "image=${IMAGE_DEST}" >> $GITHUB_OUTPUT
 
           INSPECT=$(podman manifest inspect ${IMAGE_DEST})
-          echo "image-id=$(echo "$INSPECT" | jq -r '("sha256:" + .[0].Id)')" >> $GITHUB_OUTPUT
+          echo "image-id=$(echo "$INSPECT" | jq -r '("sha256:" + .[].Id)')" >> $GITHUB_OUTPUT
 
           echo "Pushed manifest to ${IMAGE_DEST} with digest $DIGEST"
           echo $INSPECT | jq .
