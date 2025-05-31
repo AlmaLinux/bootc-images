@@ -29,7 +29,7 @@ IMAGE_NAME=almalinux-bootc \
 VERSION_MAJOR=10-kitten
 ```
 
-or Almalinux 9:alma linux kitten
+or Almalinux 9
 
 ```
 make \
