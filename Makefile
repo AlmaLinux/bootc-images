@@ -4,13 +4,19 @@ IMAGE_NAME = almalinux-bootc
 VERSION_MAJOR = 10
 PLATFORM = linux/amd64
 
+.ONESHELL:
 .PHONY: all
 all: rechunk
 
 .PHONY: image
 image:
+	if [ "$(PLATFORM)" = */v2 ]; then
+		VARIANT_FLAG="--variant=v2";
+	fi;
+
 	$(PODMAN) build \
 		--platform=$(PLATFORM) \
+		$$VARIANT_FLAG \
 		--security-opt=label=disable \
 		--cap-add=all \
 		--device /dev/fuse \
@@ -19,10 +25,8 @@ image:
 		-f $(VERSION_MAJOR)/Containerfile \
 		.
 
-.PHONY: rechunk
 rechunk:
 	$(PODMAN) run \
-		--platform=$(PLATFORM) \
 		--rm --privileged \
 		--security-opt=label=disable \
 		-v /var/lib/containers:/var/lib/containers:z \
