@@ -1,50 +1,80 @@
-## AlmaLinux Bootable Container Images
+# AlmaLinux Bootable Container Images (bootc)
 
-**Caution** AlmaLinux bootc images are currently *experimental*
+**<ins>Caution</ins>: AlmaLinux bootc images are currently *experimental*. Please use with care and report any issues.**
 
-- https://almalinux.org/get-almalinux/
+## Available Pre-built Images
 
-- https://containers.github.io/bootc/
+Official pre-built experimental images are available on Quay.io:
 
-    This is based off the [CentOS Bootc Base Images](https://gitlab.com/redhat/centos-stream/containers/bootc/-/tree/c10s?ref_type=heads) using 
-[bootc-base-imagectl](https://gitlab.com/fedora/bootc/base-images/-/blob/main/bootc-base-imagectl.md?ref_type=heads)
+* **[quay.io/almalinuxorg/almalinux-bootc](https://quay.io/repository/almalinuxorg/almalinux-bootc?tab=tags)**
+
+This project provides tooling to build experimental AlmaLinux bootable container images. These images leverage the [bootc project](https://containers.github.io/bootc/), which enables the creation of bootable OS images from container images.
+
+Our images are based on the work done for [CentOS Bootc Base Images](https://gitlab.com/redhat/centos-stream/containers/bootc/-/tree/c10s?ref_type=heads) and utilize [bootc-base-imagectl](https://gitlab.com/fedora/bootc/base-images/-/blob/main/bootc-base-imagectl.md?ref_type=heads) for their construction.
+
+## Project Status & News
+
+* **[2024-09-02]** AlmaLinux announces experimental bootc support and HeliumOS: [Read the blog post](https://almalinux.org/blog/2024-09-02-bootc-almalinux-heliumos/)
+* For the latest general information about AlmaLinux, visit [almalinux.org](https://almalinux.org/get-almalinux/).
+
+
+
+## Building Images (Advanced)
+
+This repository uses `make` to build the images locally.
+
+### Prerequisites
+
+* `make`
+* A container runtime like `podman` or `docker` (ensure it's running and you have appropriate permissions).
+* Sufficient disk space and internet connectivity.
+
+### Build Instructions
+
+The following examples demonstrate how to build specific variants:
+
+### Example: AlmaLinux OS Kitten 10
+
+```bash
+make \
+  PLATFORM=linux/amd64 \
+  IMAGE_NAME=almalinux-bootc \
+  VERSION_MAJOR=10-kitten
+```
+
+### Example: AlmaLinux OS 10 (x86_64-v2)
+
+```bash
+make \
+  PLATFORM=linux/amd64/v2 \
+  IMAGE_NAME=almalinux-bootc \
+  VERSION_MAJOR=10-kitten
+```
+
   
+### Example: AlmaLinux 9 (x86_64)
 
-### Available Official Images
-
-- https://quay.io/repository/almalinuxorg/almalinux-bootc?tab=tags
-
-## News
-
-- https://almalinux.org/blogalma linux kitten/2024-09-02-bootc-almalinux-heliumos/
-
-## Usage
-
-This repo uses make to build the images. The following example will build the x86_64-v2 variant of AlmaLinux OS Kitten 10.  
-
-```
-make \
-PLATFORM=linux/amd64/v2 \
-IMAGE_NAME=almalinux-bootc \
-VERSION_MAJOR=10-kitten
+```  
+make \  
+  PLATFORM=linux/amd64 \  
+  IMAGE_NAME=almalinux-bootc \  
+  VERSION_MAJOR=9  
 ```
 
-or Almalinux 9
+**Explanation of Build Variables:**
 
-```
-make \
-PLATFORM=linux/amd64 \
-IMAGE_NAME=almalinux-bootc \
-VERSION_MAJOR=9
-```
+* `PLATFORM`: Specifies the target architecture and variant (e.g., linux/amd64, linux/amd64/v2, linux/arm64).  
+* `IMAGE_NAME`: The base name for the output container image. (e.g. almalinux-bootc) 
+* `VERSION_MAJOR`: The AlmaLinux major version (e.g., 9, 10, 10-kitten).
 
-## Contributing
+## Contributing and Community
 
-Come share what you are building or get guidance and get involved at 
-the [Atomic SIG](https://wiki.almalinux.org/sigs/Atomic.html) and [Cloud SIG](https://wiki.almalinux.org/sigs/Cloud.html)
+We welcome contributions and feedback!  
+Join the discussion and get involved with the relevant AlmaLinux Special Interest Groups (SIGs):
 
-### Chat
-
-- Atomic SIG  [Mattermost](https://chat.almalinux.org/almalinux/channels/sigatomic) [Matrix](https://matrix.to/#/#sig-atomic:almalinux.im)
-
-- Cloud SIG [Mattermost](https://chat.almalinux.org/almalinux/channels/sigcloud) [Matrix](https://matrix.to/#/#sig-cloud:almalinux.im)
+* **Atomic SIG:** Focused on atomic updates and related tooling (like bootc).  
+  * [Wiki](https://wiki.almalinux.org/sigs/Atomic.html)  
+  * Chat: [Mattermost](https://chat.almalinux.org/almalinux/channels/sigatomic) | [Matrix](https://matrix.to/#/#sig-atomic:almalinux.im)  
+* **Cloud SIG:** Focused on cloud images and deployments.  
+  * [Wiki](https://wiki.almalinux.org/sigs/Cloud.html)  
+  * Chat: [Mattermost](https://chat.almalinux.org/almalinux/channels/sigcloud) | [Matrix](https://matrix.to/#/#sig-cloud:almalinux.im)
