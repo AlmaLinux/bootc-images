@@ -1,4 +1,4 @@
-# AlmaLinux Bootable Container Images (bootc)
+# AlmaLinux Bootable Container Base Images (bootc)
 
 **<ins>Caution</ins>: AlmaLinux bootc images are currently *experimental*. Please use with care and report any issues.**
 
