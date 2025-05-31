@@ -10,6 +10,7 @@ image:
         --security-opt=label=disable \
         --cap-add=all \
         --device /dev/fuse \
+        --iidfile /tmp/image-id \
         -t $(IMAGE_NAME) \
         -f $(VERSION_MAJOR)/Containerfile \
         .
