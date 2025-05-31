@@ -72,53 +72,15 @@ runs:
       id: run
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
-      run: |
-        sudo podman run --rm -ti ${{ env.IMAGE_NAME }} bootc --version
-
-        INFO=$(sudo podman run --rm ${{ env.IMAGE_NAME }} cat /etc/os-release)
-        echo "$INFO"
-
-        echo "id=$(echo "$INFO" | grep "^ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
-        echo "version-id=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
-        echo "vendor=$(echo "$INFO" | grep "^VENDOR_NAME=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
-
-    - name: Image Metadata
-      uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5
-      id: metadata
-      with:
-        images: ${{ env.IMAGE_NAME }}
-        labels: |
-          redhat.id=${{ steps.run.outputs.id }}
-          redhat.version-id=${{ steps.run.outputs.version-id }}
-          version=${{ steps.run.outputs.version-id }}
-          release=${{ steps.run.outputs.version-id }}
-          build-date=${{ steps.build.outputs.build-time }}
-          org.opencontainers.image.created=${{ steps.build.outputs.build-time }}
-          org.opencontainers.image.vendor=${{ steps.run.outputs.vendor }}
-          org.opencontainers.image.version=${{ steps.run.outputs.version-id }}.${{ inputs.DATE_STAMP }}.0
-          org.opencontainers.image.source=${{ github.repositoryUrl }}
-          org.opencontainers.image.title=${{ env.IMAGE_NAME }}
-          org.opencontainers.image.url=${{ github.event.repository.html_url }}
-        annotations: |
-          redhat.id=${{ steps.run.outputs.id }}
-          redhat.version-id=${{ steps.run.outputs.version-id }}
-          version=${{ steps.run.outputs.version-id }}
-          release=${{ steps.run.outputs.version-id }}
-          build-date=${{ steps.build.outputs.build-time }}
-          org.opencontainers.image.created=${{ steps.build.outputs.build-time }}
-          org.opencontainers.image.vendor=${{ steps.run.outputs.vendor }}
-          org.opencontainers.image.version=${{ steps.run.outputs.version-id }}.${{ inputs.DATE_STAMP }}.0
-          org.opencontainers.image.source=${{ github.repositoryUrl }}
-          org.opencontainers.image.title=${{ env.IMAGE_NAME }}
-          org.opencontainers.image.url=${{ github.event.repository.html_url }}
+      run: sudo podman run --rm -ti ${{ env.IMAGE_NAME }} bootc container lint
 
     - name: Log in to registry
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      if: ${{ (env.res != 0 || github.event_name == 'workflow_dispatch') && github.event_name != 'pull_request' }}
       shell: bash
       run: sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
 
     - name: Push to registry
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      if: ${{ (env.res != 0 || github.event_name == 'workflow_dispatch') && github.event_name != 'pull_request' }}
       shell: bash
       run: |
         # Tag: VERSION_MAJOR.VERSION_MINOR-DATE_STAMP-ARCH
