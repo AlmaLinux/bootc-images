@@ -13,6 +13,9 @@ packages:
 postprocess:
   - |
     #!/usr/bin/env bash
+
+    set -euo pipefail
+
     mkdir -p /usr/lib/bootc/install/
     cat > /usr/lib/bootc/install/20-rhel.toml << EOF
     [install]
@@ -20,7 +23,9 @@ postprocess:
     EOF
   - |
     #!/usr/bin/env bash
-    set -xeuo pipefail
+    set -euo pipefail
+    dnf clean all
+    rm /var/{log,cache,lib}/* -rf
     systemctl preset-all
 
 include:
