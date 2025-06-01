@@ -24,6 +24,11 @@ runs:
         IMAGE_DEST=${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
         echo "IMAGE_DEST=${IMAGE_DEST}" >> "$GITHUB_ENV"
 
+    - name: Log in to registry
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      shell: bash
+      run: sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
+
     - name: Check update
       shell: bash
       run: |
@@ -111,11 +116,6 @@ runs:
         echo "version-id=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
         echo "long-version=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"').${{ inputs.DATE_STAMP }}.0" >> $GITHUB_OUTPUT
         echo "vendor=$(echo "$INFO" | grep "^VENDOR_NAME=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
-
-    - name: Log in to registry
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
-      shell: bash
-      run: sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
 
     - name: Push to registry
       id: push
