@@ -164,9 +164,8 @@ jobs:
             org.opencontainers.image.source=${{ github.repositoryUrl }}
             org.opencontainers.image.title=${{ env.IMAGE_NAME }}
             org.opencontainers.image.url=${{ github.event.repository.html_url }}
-            org.opencontainers.image.vendor=${{ github.repository_owner }}
-            org.opencontainers.image.vendor=${{ steps.check.outputs.vendor }}
             org.opencontainers.image.version=${{ steps.check.outputs.long-version }}
+            org.opencontainers.image.vendor=AlmaLinux OS Foundation
             org.opencontainers.image.description=AlmaLinux Bootable Container Image
 
       - name: Get a newer podman (from debian testing)
@@ -219,4 +218,4 @@ jobs:
           echo "image=${IMAGE_DEST}" >> $GITHUB_OUTPUT
 
           echo "Pushed manifest to ${IMAGE_DEST} with digest $DIGEST"
-          podman manifest inspect ${IMAGE_DEST} | jq .
+          podman manifest inspect ${IMAGE_DEST}

@@ -38,17 +38,50 @@ runs:
         echo "res=${res}" >> "$GITHUB_ENV"
         echo "Exit code: '$res'"
 
+    - name: Get info
+      id: info
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      shell: bash
+      run: |
+        INFO=$(sudo podman run ${{ env.VARIANT }} --quiet --rm ${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }} bash -c "dnf upgrade -y almalinux-release && cat /etc/os-release")
+        echo "$INFO"
+
+        echo "id=$(echo "$INFO" | grep "^ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
+        echo "version-id=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
+        echo "long-version=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"').${{ inputs.DATE_STAMP }}.0" >> $GITHUB_OUTPUT
+
     - name: Build image
       id: build
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: |
+        BUILD_TIME=$(date -Iseconds)
+
+        # define a multiline variable with heredoc
+        LABELS=$(cat <<EOF
+        redhat.id=${{ steps.info.outputs.id }}
+        redhat.version-id=${{ steps.info.outputs.version-id }}
+        version=${{ steps.info.outputs.version-id }}
+        release=${{ steps.info.outputs.version-id }}
+        build-date=${BUILD_TIME}
+        org.opencontainers.image.created=${BUILD_TIME}
+        org.opencontainers.image.version=${{ steps.info.outputs.long-version }}
+        org.opencontainers.image.source=${{ github.repositoryUrl }}
+        org.opencontainers.image.title=${{ env.IMAGE_NAME }}
+        org.opencontainers.image.url=${{ github.event.repository.html_url }}
+        EOF
+        )
+
+        while IFS= read -r label; do
+          ALL_LABELS="$ALL_LABELS --label=\"$label\" --annotation=\"$label\""
+        done <<< "$LABELS"
+
         make image \
           PLATFORM=${{ env.PLATFORM }} \
+          LABELS="${ALL_LABELS}" \
           IMAGE_NAME=${{ env.IMAGE_NAME }} \
           VERSION_MAJOR=${{ inputs.VERSION_MAJOR }}
 
-        echo "build-time=$(date -Iseconds)" >> $GITHUB_OUTPUT
         echo "image-id=$(cat /tmp/image-id)" >> $GITHUB_OUTPUT
 
     - name: rechunk image
@@ -79,36 +112,6 @@ runs:
         echo "long-version=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"').${{ inputs.DATE_STAMP }}.0" >> $GITHUB_OUTPUT
         echo "vendor=$(echo "$INFO" | grep "^VENDOR_NAME=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
 
-    - name: Image Metadata
-      uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5
-      id: metadata
-      with:
-        images: ${{ steps.rechunk.outputs.image-id }}
-        labels: |
-          redhat.id=${{ steps.run.outputs.id }}
-          redhat.version-id=${{ steps.run.outputs.version-id }}
-          version=${{ steps.run.outputs.version-id }}
-          release=${{ steps.run.outputs.version-id }}
-          build-date=${{ steps.build.outputs.build-time }}
-          org.opencontainers.image.created=${{ steps.build.outputs.build-time }}
-          org.opencontainers.image.vendor=${{ steps.run.outputs.vendor }}
-          org.opencontainers.image.version=${{ steps.run.outputs.long-version }}
-          org.opencontainers.image.source=${{ github.repositoryUrl }}
-          org.opencontainers.image.title=${{ env.IMAGE_NAME }}
-          org.opencontainers.image.url=${{ github.event.repository.html_url }}
-        annotations: |
-          redhat.id=${{ steps.run.outputs.id }}
-          redhat.version-id=${{ steps.run.outputs.version-id }}
-          version=${{ steps.run.outputs.version-id }}
-          release=${{ steps.run.outputs.version-id }}
-          build-date=${{ steps.build.outputs.build-time }}
-          org.opencontainers.image.created=${{ steps.build.outputs.build-time }}
-          org.opencontainers.image.vendor=${{ steps.run.outputs.vendor }}
-          org.opencontainers.image.version=${{ steps.run.outputs.long-version }}
-          org.opencontainers.image.source=${{ github.repositoryUrl }}
-          org.opencontainers.image.title=${{ env.IMAGE_NAME }}
-          org.opencontainers.image.url=${{ github.event.repository.html_url }}
-
     - name: Log in to registry
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
@@ -127,8 +130,10 @@ runs:
           docker://${IMAGE_DEST}:${{ env.VERSION }}-${{ inputs.DATE_STAMP }}-${{ matrix.ARCH }}
 
         echo "digest=$(cat /tmp/digestfile)" >> $GITHUB_OUTPUT
+        sudo podman inspect ${{ env.IMAGE_ID }}
 
     - name: Create Job Outputs
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: |
         mkdir -p /tmp/outputs/digests
@@ -147,6 +152,7 @@ runs:
         cat /tmp/outputs/digests/${{ env.IMAGE_NAME }}-${{ matrix.VERSION_MAJOR }}-${{ matrix.ARCH }}.json
 
     - name: Upload Output Artifacts
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: ${{ env.IMAGE_NAME }}-${{ matrix.VERSION_MAJOR }}-${{ matrix.ARCH }}
