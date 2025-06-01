@@ -43,7 +43,7 @@ runs:
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: |
-        INFO=$(sudo podman run ${{ env.VARIANT }} --quiet --rm ${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }} bash -c "dnf upgrade -y almalinux-release && cat /etc/os-release")
+        INFO=$(sudo podman run ${{ env.VARIANT }} --quiet --rm ${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }} bash -c "dnf upgrade -y almalinux-release && cat /etc/os-release" || true)
         echo "$INFO"
 
         echo "id=$(echo "$INFO" | grep "^ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
