@@ -147,15 +147,15 @@ runs:
           --arg vendor "${{ steps.run.outputs.vendor }}" \
           --arg image_id "${{ steps.rechunk.outputs.image-id }}" \
           '{($platform): {digest: $digest, id: $id, version: $version, major: $major, long_version: $long_version, vendor: $vendor, image_id: $image_id}}' \
-          > /tmp/outputs/digests/${{ env.IMAGE_NAME }}-${{ matrix.VERSION_MAJOR }}-${{ matrix.ARCH }}.json
+          > /tmp/outputs/digests/${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_${{ matrix.ARCH }}.json
 
-        cat /tmp/outputs/digests/${{ env.IMAGE_NAME }}-${{ matrix.VERSION_MAJOR }}-${{ matrix.ARCH }}.json
+        cat /tmp/outputs/digests/${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_${{ matrix.ARCH }}.json
 
     - name: Upload Output Artifacts
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
-        name: ${{ env.IMAGE_NAME }}-${{ matrix.VERSION_MAJOR }}-${{ matrix.ARCH }}
+        name: ${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_${{ matrix.ARCH }}
         retention-days: 1
         if-no-files-found: error
         path: |
