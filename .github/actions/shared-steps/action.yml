@@ -128,9 +128,8 @@ runs:
         VERSION: ${{ steps.run.outputs.version-id }}
       shell: bash
       run: |
-        ARCH=${{ matrix.ARCH }}
         sudo podman push --digestfile=/tmp/digestfile ${{ env.IMAGE_ID }} \
-          docker://${IMAGE_DEST}:${{ env.VERSION }}-${{ inputs.DATE_STAMP }}-${ARCH//\//_}
+          docker://${IMAGE_DEST}:${{ env.VERSION }}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}
 
         echo "digest=$(cat /tmp/digestfile)" >> $GITHUB_OUTPUT
         sudo podman inspect ${{ env.IMAGE_ID }}
