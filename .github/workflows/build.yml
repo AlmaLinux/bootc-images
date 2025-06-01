@@ -62,7 +62,7 @@ jobs:
       fail-fast: false
       matrix:
         VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
-        ARCH: [amd64, arm64] #, amd64/v2]
+        ARCH: [amd64, arm64, amd64/v2]
         exclude:
           - VERSION_MAJOR: 9
             ARCH: amd64/v2
