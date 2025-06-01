@@ -24,6 +24,9 @@ runs:
         IMAGE_DEST=${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
         echo "IMAGE_DEST=${IMAGE_DEST}" >> "$GITHUB_ENV"
 
+        ARCH=${{ matrix.ARCH }}
+        echo "CLEAN_ARCH=${ARCH//\//_}" >> "$GITHUB_ENV"
+
     - name: Log in to registry
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
@@ -125,9 +128,9 @@ runs:
         VERSION: ${{ steps.run.outputs.version-id }}
       shell: bash
       run: |
-        # Tag: VERSION_MAJOR.VERSION_MINOR-DATE_STAMP-ARCH
+        ARCH=${{ matrix.ARCH }}
         sudo podman push --digestfile=/tmp/digestfile ${{ env.IMAGE_ID }} \
-          docker://${IMAGE_DEST}:${{ env.VERSION }}-${{ inputs.DATE_STAMP }}-${{ matrix.ARCH }}
+          docker://${IMAGE_DEST}:${{ env.VERSION }}-${{ inputs.DATE_STAMP }}-${ARCH//\//_}
 
         echo "digest=$(cat /tmp/digestfile)" >> $GITHUB_OUTPUT
         sudo podman inspect ${{ env.IMAGE_ID }}
@@ -137,7 +140,7 @@ runs:
       shell: bash
       run: |
         mkdir -p /tmp/outputs/digests
-        # using jq, create a json object with the platform as a key, and then a dictionary with the digest, id and version as values
+
         jq -n --arg platform "${{ matrix.ARCH }}" \
           --arg major "${{ inputs.VERSION_MAJOR }}" \
           --arg digest "${{ steps.push.outputs.digest }}" \
@@ -147,15 +150,15 @@ runs:
           --arg vendor "${{ steps.run.outputs.vendor }}" \
           --arg image_id "${{ steps.rechunk.outputs.image-id }}" \
           '{($platform): {digest: $digest, id: $id, version: $version, major: $major, long_version: $long_version, vendor: $vendor, image_id: $image_id}}' \
-          > /tmp/outputs/digests/${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_${{ matrix.ARCH }}.json
+          > /tmp/outputs/digests/${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_${{ env.CLEAN_ARCH }}.json
 
-        cat /tmp/outputs/digests/${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_${{ matrix.ARCH }}.json
+        cat /tmp/outputs/digests/${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_${{ env.CLEAN_ARCH }}.json
 
     - name: Upload Output Artifacts
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
-        name: ${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_${{ matrix.ARCH }}
+        name: ${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_${{ env.CLEAN_ARCH }}
         retention-days: 1
         if-no-files-found: error
         path: |

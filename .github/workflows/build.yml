@@ -125,9 +125,11 @@ jobs:
         env:
           DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
         run: |
-          # Ensure we have at least two digests
-          if [[ $(echo ${DIGESTS_JSON} | jq 'length') -lt 2 ]]; then
-            echo "Expected at least 2 digests, found $(echo ${DIGESTS_JSON} | jq 'length')"
+          [[ "${{ matrix.VERSION_MAJOR }}" == "9" ]] && EXPECTED=2 || EXPECTED=3
+
+          # Ensure we have the correct number of digests
+          if [[ $(echo ${DIGESTS_JSON} | jq 'length') -ne $EXPECTED ]]; then
+            echo "Expected $EXPECTED digests, found $(echo ${DIGESTS_JSON} | jq 'length')"
             exit 1
           fi
 
@@ -191,9 +193,13 @@ jobs:
           IMAGE_DEST=${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
 
           for platform in $(echo $DIGESTS_JSON | jq -r '. | to_entries | .[].key'); do
-            digest=$(echo $DIGESTS_JSON | jq -r ".$platform.digest")
+            digest=$(echo $DIGESTS_JSON | jq -r ".[\"$platform\"].digest")
             echo "Adding ${IMAGE_DEST}@$digest for $platform"
-            podman manifest add $MANIFEST ${IMAGE_DEST}@$digest --arch $platform
+            if [[ "$platform" == "amd64/v2" ]]; then
+              podman manifest add $MANIFEST ${IMAGE_DEST}@$digest --arch amd64 --variant v2
+            else
+              podman manifest add $MANIFEST ${IMAGE_DEST}@$digest --arch $platform
+            fi
           done
 
           # Apply the labels to the manifest (separated by newlines)
