@@ -17,30 +17,20 @@ runs:
     - name: Prepare environment
       shell: bash
       run: |
-        # Platform / arch
-        platform="${{ env.PLATFORM }}"
-        ARCH=${platform#linux/}
-        [ "x${ARCH}" != "x" ] && echo "ARCH=${ARCH}" >> "$GITHUB_ENV"
-
-        # Platform / machine
-        MACHINE=x86_64
-        [ "$ARCH" = "arm64" ] && MACHINE=aarch64
-        echo "MACHINE=${MACHINE}" >> "$GITHUB_ENV"
-
-        # Minor version
-        VERSION_MINOR=
-        if [[ ${{ inputs.VERSION_MAJOR }} != *'kitten'* ]]; then
-          almalinux_release=https://repo.almalinux.org/almalinux/almalinux-release-latest-${{ inputs.VERSION_MAJOR }}.${MACHINE}.rpm
-          # TODO: remove when AlmaLinux 10.0 is released
-          [ "${{ inputs.VERSION_MAJOR }}" = "10" ] && almalinux_release=https://vault.almalinux.org/almalinux-release-latest-10-beta.${MACHINE}.rpm
-          release=$(rpm -q --qf="%{VERSION}\n" ${almalinux_release} 2>/dev/null)
-          VERSION_MINOR=.$(cut -d '.' -f 2 <<< "$release")
-        fi
-        echo "VERSION_MINOR=${VERSION_MINOR}" >> "$GITHUB_ENV"
+        [[ "${{ env.PLATFORM }}" = */v2 ]] && VARIANT="--variant v2"
+        echo "VARIANT=--platform ${{ env.PLATFORM }} ${VARIANT}" >> "$GITHUB_ENV"
 
         # quay.io/almalinuxorg/almalinux-bootc
         IMAGE_DEST=${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
         echo "IMAGE_DEST=${IMAGE_DEST}" >> "$GITHUB_ENV"
+
+        ARCH=${{ matrix.ARCH }}
+        echo "CLEAN_ARCH=${ARCH//\//_}" >> "$GITHUB_ENV"
+
+    - name: Log in to registry
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      shell: bash
+      run: sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
 
     - name: Check update
       shell: bash
@@ -52,75 +42,123 @@ runs:
         #   125 - tag/platform not found
         #   127 - command not found
         res=0
-        sudo podman run --quiet --rm ${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }} dnf check-update || res=$?
+        sudo podman run ${{ env.VARIANT }} --quiet --rm ${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }} dnf check-update || res=$?
         echo "res=${res}" >> "$GITHUB_ENV"
         echo "Exit code: '$res'"
+
+    - name: Get info
+      id: info
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      shell: bash
+      run: |
+        INFO=$(sudo podman run ${{ env.VARIANT }} --quiet --rm quay.io/almalinuxorg/${{ inputs.VERSION_MAJOR }}-base bash -c "dnf upgrade -y almalinux-release && cat /etc/os-release" || true)
+        echo "$INFO"
+
+        echo "id=$(echo "$INFO" | grep "^ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
+        echo "version-id=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
+        echo "long-version=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"').${{ inputs.DATE_STAMP }}.0" >> $GITHUB_OUTPUT
 
     - name: Build image
       id: build
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: |
+        BUILD_TIME=$(date -Iseconds)
+
+        # define a multiline variable with heredoc
+        LABELS=$(cat <<EOF
+        redhat.id=${{ steps.info.outputs.id }}
+        redhat.version-id=${{ steps.info.outputs.version-id }}
+        version=${{ steps.info.outputs.version-id }}
+        release=${{ steps.info.outputs.version-id }}
+        build-date=${BUILD_TIME}
+        org.opencontainers.image.created=${BUILD_TIME}
+        org.opencontainers.image.version=${{ steps.info.outputs.long-version }}
+        org.opencontainers.image.source=${{ github.repositoryUrl }}
+        org.opencontainers.image.title=${{ env.IMAGE_NAME }}
+        org.opencontainers.image.url=${{ github.event.repository.html_url }}
+        EOF
+        )
+
+        while IFS= read -r label; do
+          ALL_LABELS="$ALL_LABELS --label=\"$label\" --annotation=\"$label\""
+        done <<< "$LABELS"
+
         make image \
           PLATFORM=${{ env.PLATFORM }} \
+          LABELS="${ALL_LABELS}" \
           IMAGE_NAME=${{ env.IMAGE_NAME }} \
           VERSION_MAJOR=${{ inputs.VERSION_MAJOR }}
 
-        echo "build-time=$(date -Iseconds)" >> $GITHUB_OUTPUT
+        echo "image-id=$(cat /tmp/image-id)" >> $GITHUB_OUTPUT
+
+    - name: rechunk image
+      id: rechunk
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      shell: bash
+      run: |
+        make rechunk \
+          PLATFORM=${{ env.PLATFORM }} \
+          IMAGE_NAME=${{ env.IMAGE_NAME }}
+
+        echo "image-id=sha256:$(sudo podman image inspect ${{ env.IMAGE_NAME }} -f "{{.Id}}")" >> $GITHUB_OUTPUT
 
     - name: Run Image
       id: run
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
+      env:
+        IMAGE_ID: ${{ steps.rechunk.outputs.image-id }}
       run: |
-        sudo podman run --rm -ti ${{ env.IMAGE_NAME }} bootc --version
+        sudo podman run ${{ env.VARIANT }} --rm -ti ${{ env.IMAGE_ID }} bootc --version
 
-        INFO=$(sudo podman run --rm ${{ env.IMAGE_NAME }} cat /etc/os-release)
+        INFO=$(sudo podman run ${{ env.VARIANT }} --rm ${{ env.IMAGE_ID }} cat /etc/os-release)
         echo "$INFO"
 
         echo "id=$(echo "$INFO" | grep "^ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
         echo "version-id=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
+        echo "long-version=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"').${{ inputs.DATE_STAMP }}.0" >> $GITHUB_OUTPUT
         echo "vendor=$(echo "$INFO" | grep "^VENDOR_NAME=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
 
-    - name: Image Metadata
-      uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5
-      id: metadata
-      with:
-        images: ${{ env.IMAGE_NAME }}
-        labels: |
-          redhat.id=${{ steps.run.outputs.id }}
-          redhat.version-id=${{ steps.run.outputs.version-id }}
-          version=${{ steps.run.outputs.version-id }}
-          release=${{ steps.run.outputs.version-id }}
-          build-date=${{ steps.build.outputs.build-time }}
-          org.opencontainers.image.created=${{ steps.build.outputs.build-time }}
-          org.opencontainers.image.vendor=${{ steps.run.outputs.vendor }}
-          org.opencontainers.image.version=${{ steps.run.outputs.version-id }}.${{ inputs.DATE_STAMP }}.0
-          org.opencontainers.image.source=${{ github.repositoryUrl }}
-          org.opencontainers.image.title=${{ env.IMAGE_NAME }}
-          org.opencontainers.image.url=${{ github.event.repository.html_url }}
-        annotations: |
-          redhat.id=${{ steps.run.outputs.id }}
-          redhat.version-id=${{ steps.run.outputs.version-id }}
-          version=${{ steps.run.outputs.version-id }}
-          release=${{ steps.run.outputs.version-id }}
-          build-date=${{ steps.build.outputs.build-time }}
-          org.opencontainers.image.created=${{ steps.build.outputs.build-time }}
-          org.opencontainers.image.vendor=${{ steps.run.outputs.vendor }}
-          org.opencontainers.image.version=${{ steps.run.outputs.version-id }}.${{ inputs.DATE_STAMP }}.0
-          org.opencontainers.image.source=${{ github.repositoryUrl }}
-          org.opencontainers.image.title=${{ env.IMAGE_NAME }}
-          org.opencontainers.image.url=${{ github.event.repository.html_url }}
-
-    - name: Log in to registry
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
-      shell: bash
-      run: sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
-
     - name: Push to registry
+      id: push
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      env:
+        IMAGE_ID: ${{ steps.rechunk.outputs.image-id }}
+        VERSION: ${{ steps.run.outputs.version-id }}
+      shell: bash
+      run: |
+        sudo podman push --digestfile=/tmp/digestfile ${{ env.IMAGE_ID }} \
+          docker://${IMAGE_DEST}:${{ env.VERSION }}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}
+
+        echo "digest=$(cat /tmp/digestfile)" >> $GITHUB_OUTPUT
+        sudo podman inspect ${{ env.IMAGE_ID }}
+
+    - name: Create Job Outputs
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: |
-        # Tag: VERSION_MAJOR.VERSION_MINOR-DATE_STAMP-ARCH
-        sudo podman push ${{ env.IMAGE_NAME }} \
-          docker://${IMAGE_DEST}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}-${{ inputs.DATE_STAMP }}-${{ env.ARCH }}
+        mkdir -p /tmp/outputs/digests
+
+        jq -n --arg platform "${{ matrix.ARCH }}" \
+          --arg major "${{ inputs.VERSION_MAJOR }}" \
+          --arg digest "${{ steps.push.outputs.digest }}" \
+          --arg id "${{ steps.run.outputs.id }}" \
+          --arg version "${{ steps.run.outputs.version-id }}" \
+          --arg long_version "${{ steps.run.outputs.long-version }}" \
+          --arg vendor "${{ steps.run.outputs.vendor }}" \
+          --arg image_id "${{ steps.rechunk.outputs.image-id }}" \
+          '{($platform): {digest: $digest, id: $id, version: $version, major: $major, long_version: $long_version, vendor: $vendor, image_id: $image_id}}' \
+          > /tmp/outputs/digests/${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_${{ env.CLEAN_ARCH }}.json
+
+        cat /tmp/outputs/digests/${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_${{ env.CLEAN_ARCH }}.json
+
+    - name: Upload Output Artifacts
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: ${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_${{ env.CLEAN_ARCH }}
+        retention-days: 1
+        if-no-files-found: error
+        path: |
+          /tmp/outputs/digests/*.json

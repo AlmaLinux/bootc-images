@@ -54,47 +54,21 @@ jobs:
           date_stamp=$(date -u '+%Y%m%d')
           [ "x${date_stamp}" != "x" ] && echo "date_stamp=${date_stamp}" >> "$GITHUB_OUTPUT"
 
-  build-amd64:
-    name: amd64 image
-    runs-on: ubuntu-24.04
+  build:
+    name: Build image
+    runs-on: ${{ matrix.ARCH == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     needs: [set-versions-matrix]
     strategy:
       fail-fast: false
       matrix:
         VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
-
-    env:
-      PLATFORM: linux/amd64
-      DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
-
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-
-    - uses: ./.github/actions/shared-steps
-      name: Build and Push
-      with:
-        VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
-        DATE_STAMP: ${{ env.DATE_STAMP }}
-        IMAGE_REGISTRY: ${{ secrets.IMAGE_REGISTRY }}
-        REGISTRY_USER:  ${{ secrets.REGISTRY_USER }}
-        REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
-
-  build-amd64-v2:
-    if: ${{ always() && (contains(fromJSON(needs.set-versions-matrix.outputs.matrix), '10') || contains(fromJSON(needs.set-versions-matrix.outputs.matrix), '10-kitten')) }}
-    name: amd64-v2 image
-    runs-on: ubuntu-24.04
-    needs: [set-versions-matrix]
-    strategy:
-      fail-fast: false
-      matrix:
-        VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
+        ARCH: [amd64, arm64, amd64/v2]
         exclude:
           - VERSION_MAJOR: 9
+            ARCH: amd64/v2
 
     env:
-      PLATFORM: linux/amd64/v2
+      PLATFORM: linux/${{ matrix.ARCH }}
       DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
 
     steps:
@@ -104,32 +78,6 @@ jobs:
 
     - uses: ./.github/actions/shared-steps
       name: Build and Push
-      with:
-        VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
-        DATE_STAMP: ${{ env.DATE_STAMP }}
-        IMAGE_REGISTRY: ${{ secrets.IMAGE_REGISTRY }}
-        REGISTRY_USER:  ${{ secrets.REGISTRY_USER }}
-        REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
-
-  build-arm64:
-    name: arm64 image
-    runs-on: ubuntu-24.04-arm
-    needs: [set-versions-matrix]
-    strategy:
-      fail-fast: false
-      matrix:
-        VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
-    env:
-      PLATFORM: linux/arm64
-      DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
-
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-
-    - uses: ./.github/actions/shared-steps
-      name: Build and Push (${{ env.VERSION_MAJOR }})
       with:
         VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
         DATE_STAMP: ${{ env.DATE_STAMP }}
@@ -140,7 +88,7 @@ jobs:
   push-manifest:
     if: ${{ always() && contains(join(needs.*.result, ','), 'success') }}
     name: Push manifest
-    needs: [set-versions-matrix, build-amd64, build-arm64]
+    needs: [set-versions-matrix, build]
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -150,22 +98,6 @@ jobs:
       DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
 
     steps:
-      - name: Set environment
-        run: |
-          # Minor version for both amd64 and arm64
-          for MACHINE in x86_64 aarch64; do
-            VERSION_MINOR=
-            release=${{ matrix.VERSION_MAJOR }}
-            if [[ "${{ matrix.VERSION_MAJOR }}" != *'kitten'* ]]; then
-              almalinux_release=https://repo.almalinux.org/almalinux/almalinux-release-latest-${{ matrix.VERSION_MAJOR }}.${MACHINE}.rpm
-              release=$(rpm -q --qf="%{VERSION}\n" ${almalinux_release} 2>/dev/null)
-              VERSION_MINOR=.$(cut -d '.' -f 2 <<< "$release")
-            fi
-            echo "VERSION_MINOR_${MACHINE}=${VERSION_MINOR}" >> "$GITHUB_ENV"
-            echo "[Debug] MACHINE=${MACHINE} release=$release VERSION_MINOR=${VERSION_MINOR}"
-            unset VERSION_MINOR release
-          done
-
       - name: Login to registry (docker)
         uses: docker/login-action@v3
         with:
@@ -173,33 +105,123 @@ jobs:
           username: ${{ secrets.REGISTRY_USER }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
-      - name: Create and push manifest (docker)
-        run:  |
-          # Manifest for both amd64 and arm64
+      - name: Fetch Build Outputs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: ${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_*
+          merge-multiple: true
+          path: /tmp/artifacts
+
+      - name: Load Outputs
+        id: load-outputs
+        run: |
+          ls -lR /tmp/artifacts/
+          jq -sc add /tmp/artifacts/*.json > merged.json
+          echo "DIGESTS_JSON=$(cat merged.json)" >> $GITHUB_OUTPUT
+          jq '.' merged.json
+
+      - name: Sanity check
+        id: check
+        env:
+          DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
+        run: |
+          [[ "${{ matrix.VERSION_MAJOR }}" == "9" ]] && EXPECTED=2 || EXPECTED=3
+
+          # Ensure we have the correct number of digests
+          if [[ $(echo ${DIGESTS_JSON} | jq 'length') -ne $EXPECTED ]]; then
+            echo "Expected $EXPECTED digests, found $(echo ${DIGESTS_JSON} | jq 'length')"
+            exit 1
+          fi
+
+          # Ensure all versions match
+          COUNT=$(echo ${DIGESTS_JSON} | jq '[.[] | .version] | unique | length')
+          if [[ $COUNT -ne 1 ]]; then
+            echo "Versions do not match across all platforms"
+            echo ${DIGESTS_JSON} | jq '[.[] | .version]'
+            exit 1
+          fi
+
+          echo "id=$(echo ${DIGESTS_JSON} | jq -r '[.[] | .id] | unique | .[0]')" >> $GITHUB_OUTPUT
+          echo "version-id=$(echo ${DIGESTS_JSON} | jq -r '[.[] | .version] | unique | .[0]')" >> $GITHUB_OUTPUT
+          echo "long-version=$(echo ${DIGESTS_JSON} | jq -r '[.[] | .long_version] | unique | .[0]')" >> $GITHUB_OUTPUT
+          echo "vendor=$(echo ${DIGESTS_JSON} | jq -r '[.[] | .vendor] | unique | .[0]')" >> $GITHUB_OUTPUT
+          echo "date=$(date -u +%Y\-%m\-%d\T%H\:%M\:%S\Z)" >> $GITHUB_OUTPUT
+
+      - name: Image Metadata
+        uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5
+        id: metadata
+        with:
+          tags: |
+            type=raw,value=latest,enable=${{ matrix.VERSION_MAJOR == env.LATEST_MAJOR }}
+            type=raw,value=${{ matrix.VERSION_MAJOR }}
+            type=raw,value=${{ steps.check.outputs.version-id }}
+            type=raw,value=${{ steps.check.outputs.version-id }}-${{ env.DATE_STAMP }}
+            type=raw,value=${{ steps.check.outputs.long-version }}
+          labels: |
+            redhat.id=${{ steps.check.outputs.id }}
+            redhat.version-id=${{ steps.check.outputs.version-id }}
+            version=${{ steps.check.outputs.version-id }}
+            release=${{ steps.check.outputs.version-id }}
+            org.opencontainers.image.created=${{ steps.check.outputs.date }}
+            org.opencontainers.image.source=${{ github.repositoryUrl }}
+            org.opencontainers.image.title=${{ env.IMAGE_NAME }}
+            org.opencontainers.image.url=${{ github.event.repository.html_url }}
+            org.opencontainers.image.version=${{ steps.check.outputs.long-version }}
+            org.opencontainers.image.vendor=AlmaLinux OS Foundation
+            org.opencontainers.image.description=AlmaLinux Bootable Container Image
+
+      - name: Get a newer podman (from debian testing)
+        run: |
+          set -eux
+          echo 'deb [trusted=yes] https://ftp.debian.org/debian/ testing main' | sudo tee /etc/apt/sources.list.d/testing.list
+          sudo apt update
+          sudo apt install -y crun/testing podman/testing
+
+      - name: Create Manifest
+        id: create-manifest
+        run: |
+          IMAGE_DEST=${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+          podman manifest create ${IMAGE_DEST}
+          echo "MANIFEST=${IMAGE_DEST}" >> $GITHUB_OUTPUT
+
+      - name: Populate Manifest
+        env:
+          MANIFEST: ${{ steps.create-manifest.outputs.MANIFEST }}
+          DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
+          LABELS: ${{ steps.metadata.outputs.labels }}
+        run: |
           IMAGE_DEST=${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
 
-          amd64_exists=0
-          arm64_exists=0
-          docker manifest inspect ${IMAGE_DEST}:${{ matrix.VERSION_MAJOR }}${{ env.VERSION_MINOR_x86_64 }}-${{ env.DATE_STAMP }}-amd64 >/dev/null 2>&1 \
-            || amd64_exists=$?
-          docker manifest inspect ${IMAGE_DEST}:${{ matrix.VERSION_MAJOR }}${{ env.VERSION_MINOR_aarch64 }}-${{ env.DATE_STAMP }}-arm64 >/dev/null 2>&1 \
-            || arm64_exists=$?
-          [ $amd64_exists -ne 0 -o $arm64_exists -ne 0 ] && exit 0
-
-          # Don't push manifest if amd64 and arm64 minor versions differ
-          VERSION_MINOR=${{ env.VERSION_MINOR_x86_64 }}
-          [ "${{ env.VERSION_MINOR_x86_64 }}" != "${{ env.VERSION_MINOR_aarch64 }}" ] && exit 0
-
-          # Loop over need tags: latest, VERSION_MAJOR, VERSION_MAJOR.VERSION_MINOR, VERSION_MAJOR.VERSION_MINOR-DATE_STAMP
-          tags="latest ${{ matrix.VERSION_MAJOR }} ${{ matrix.VERSION_MAJOR }}${VERSION_MINOR}-${{ env.DATE_STAMP }}"
-          [[ ${{ matrix.VERSION_MAJOR }} != *'kitten'* ]] && tags="${tags} ${{ matrix.VERSION_MAJOR }}${VERSION_MINOR}"
-          for tag in $tags; do
-              [ ${{ matrix.VERSION_MAJOR }} != ${{ env.LATEST_MAJOR }} -a "${tag}" = "latest" ] && continue
-              docker manifest create ${IMAGE_DEST}:${tag} \
-                  ${IMAGE_DEST}:${{ matrix.VERSION_MAJOR }}${VERSION_MINOR}-${{ env.DATE_STAMP }}-amd64 \
-                  ${IMAGE_DEST}:${{ matrix.VERSION_MAJOR }}${VERSION_MINOR}-${{ env.DATE_STAMP }}-arm64
-
-              docker manifest inspect ${IMAGE_DEST}:${tag}
-
-              docker manifest push ${IMAGE_DEST}:${tag}
+          for platform in $(echo $DIGESTS_JSON | jq -r '. | to_entries | .[].key'); do
+            digest=$(echo $DIGESTS_JSON | jq -r ".[\"$platform\"].digest")
+            echo "Adding ${IMAGE_DEST}@$digest for $platform"
+            if [[ "$platform" == "amd64/v2" ]]; then
+              podman manifest add $MANIFEST ${IMAGE_DEST}@$digest --arch amd64 --variant v2
+            else
+              podman manifest add $MANIFEST ${IMAGE_DEST}@$digest --arch $platform
+            fi
           done
+
+          # Apply the labels to the manifest (separated by newlines)
+          while IFS= read -r label; do
+            echo "Applying label $label to manifest"
+            podman manifest annotate --index --annotation "$label" $MANIFEST
+          done <<< "$LABELS"
+
+      - name: Push Manifest
+        id: push_manifest
+        env:
+          MANIFEST: ${{ steps.create-manifest.outputs.MANIFEST }}
+          TAGS: ${{ steps.metadata.outputs.tags }}
+        run: |
+          IMAGE_DEST=${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+          while IFS= read -r tag; do
+            podman manifest push --all=false --digestfile=/tmp/digestfile $MANIFEST ${IMAGE_DEST}:$tag
+          done <<< "$TAGS"
+
+          DIGEST=$(cat /tmp/digestfile)
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+          echo "image=${IMAGE_DEST}" >> $GITHUB_OUTPUT
+
+          echo "Pushed manifest to ${IMAGE_DEST} with digest $DIGEST"
+          podman manifest inspect ${IMAGE_DEST}

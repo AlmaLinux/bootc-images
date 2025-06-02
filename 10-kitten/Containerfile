@@ -1,5 +1,17 @@
 FROM quay.io/almalinuxorg/10-kitten-base:10-kitten as repos
-FROM quay.io/centos-bootc/centos-bootc:stream10 as builder
+FROM quay.io/centos-bootc/centos-bootc:stream10 as imagectl
+FROM quay.io/almalinuxorg/10-kitten-base:10-kitten as builder
+
+RUN dnf install -y \
+    podman \
+    bootc \
+    ostree \
+    rpm-ostree \
+    && dnf clean all
+
+COPY --from=imagectl /usr/share/doc/bootc-base-imagectl/ /usr/share/doc/bootc-base-imagectl/
+COPY --from=imagectl /usr/libexec/bootc-base-imagectl /usr/libexec/bootc-base-imagectl
+RUN chmod +x /usr/libexec/bootc-base-imagectl
 
 RUN rm -rf /etc/yum.repos.d/*
 
@@ -9,7 +21,7 @@ COPY --from=repos /etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-10 /etc/pki/rpm-gpg
 
 COPY 10-kitten/almalinux-10-kitten.yaml /usr/share/doc/bootc-base-imagectl/manifests/
 
-RUN /usr/libexec/bootc-base-imagectl build-rootfs --manifest=almalinux-10-kitten /target-rootfs
+RUN /usr/libexec/bootc-base-imagectl build-rootfs --reinject --manifest=almalinux-10-kitten /target-rootfs
 
 ###
 
@@ -19,6 +31,8 @@ COPY --from=builder /target-rootfs/ /
 
 LABEL containers.bootc 1
 LABEL ostree.bootable 1
+LABEL org.opencontainers.image.vendor AlmaLinux OS Foundation
+LABEL org.opencontainers.image.description AlmaLinux Bootable Container Image
 RUN bootc container lint --fatal-warnings
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]

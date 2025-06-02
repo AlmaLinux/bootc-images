@@ -9,7 +9,7 @@ COPY --from=repos /etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-9 /etc/pki/rpm-gpg
 
 COPY 9/almalinux-9.yaml /usr/share/doc/bootc-base-imagectl/manifests/
 
-RUN /usr/libexec/bootc-base-imagectl build-rootfs --manifest=almalinux-9 /target-rootfs
+RUN /usr/libexec/bootc-base-imagectl build-rootfs --reinject --manifest=almalinux-9 /target-rootfs
 
 ###
 
@@ -19,6 +19,8 @@ COPY --from=builder /target-rootfs/ /
 
 LABEL containers.bootc 1
 LABEL ostree.bootable 1
+LABEL org.opencontainers.image.vendor AlmaLinux OS Foundation
+LABEL org.opencontainers.image.description AlmaLinux Bootable Container Image
 RUN bootc container lint --fatal-warnings
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]
