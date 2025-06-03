@@ -84,6 +84,7 @@ jobs:
         IMAGE_REGISTRY: ${{ secrets.IMAGE_REGISTRY }}
         REGISTRY_USER:  ${{ secrets.REGISTRY_USER }}
         REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+        SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
   push-manifest:
     if: ${{ always() && contains(join(needs.*.result, ','), 'success') }}
@@ -98,6 +99,9 @@ jobs:
       DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
 
     steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
+
       - name: Login to registry (docker)
         uses: docker/login-action@v3
         with:
@@ -213,11 +217,15 @@ jobs:
         env:
           MANIFEST: ${{ steps.create-manifest.outputs.MANIFEST }}
           TAGS: ${{ steps.metadata.outputs.tags }}
+          COSIGN_EXPERIMENTAL: false
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
         run: |
           IMAGE_DEST=${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
           while IFS= read -r tag; do
             podman manifest push --all=false --digestfile=/tmp/digestfile $MANIFEST ${IMAGE_DEST}:$tag
           done <<< "$TAGS"
+
+          cosign sign -y --key env://COSIGN_PRIVATE_KEY ${IMAGE_DEST}:${tag}
 
           DIGEST=$(cat /tmp/digestfile)
           echo "digest=$DIGEST" >> $GITHUB_OUTPUT

@@ -11,6 +11,8 @@ inputs:
     required: true
   REGISTRY_PASSWORD:
     required: true
+  SIGNING_SECRET:
+    required: false
 runs:
   using: "composite"
   steps:
@@ -29,7 +31,11 @@ runs:
     - name: Log in to registry
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
-      run: sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
+      run: |
+        sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
+
+        # This is needed by cosign
+        sudo docker login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
 
     - name: Check update
       shell: bash
@@ -131,7 +137,21 @@ runs:
           docker://${IMAGE_DEST}:${{ env.VERSION }}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}
 
         echo "digest=$(cat /tmp/digestfile)" >> $GITHUB_OUTPUT
+        echo "image-ref=${IMAGE_DEST}:${{ env.VERSION }}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}" >> $GITHUB_OUTPUT
         sudo podman inspect ${{ env.IMAGE_ID }}
+
+    - name: Install Cosign
+      if: ${{ github.event_name != 'pull_request' && (env.res != 0 || github.event_name == 'workflow_dispatch') }}
+      uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
+      with:
+        install-dir: '/tmp/.cosign'
+
+    - name: Sign Image
+      if: ${{ github.event_name != 'pull_request' && (env.res != 0 || github.event_name == 'workflow_dispatch') }}
+      shell: bash
+      run: |
+        echo "${{ inputs.SIGNING_SECRET }}" > /tmp/.cosign/cosign.key
+        sudo /tmp/.cosign/cosign sign -y --key /tmp/.cosign/cosign.key ${{ steps.push.outputs.image-ref }}@${{ steps.push.outputs.digest }}
 
     - name: Create Job Outputs
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
