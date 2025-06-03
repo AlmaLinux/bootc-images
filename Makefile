@@ -11,13 +11,8 @@ all: rechunk
 
 .PHONY: image
 image:
-	if [ "$(PLATFORM)" = */v2 ]; then
-		VARIANT_FLAG="--variant=v2";
-	fi;
-
 	$(PODMAN) build \
 		--platform=$(PLATFORM) \
-		$$VARIANT_FLAG \
 		--security-opt=label=disable \
 		--cap-add=all \
 		--device /dev/fuse \
