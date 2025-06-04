@@ -98,13 +98,6 @@ jobs:
       DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
 
     steps:
-      - name: Login to registry (docker)
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.IMAGE_REGISTRY }}
-          username: ${{ secrets.REGISTRY_USER }}
-          password: ${{ secrets.REGISTRY_PASSWORD }}
-
       - name: Fetch Build Outputs
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -115,12 +108,19 @@ jobs:
       - name: Load Outputs
         id: load-outputs
         run: |
+          if [[ ! -d /tmp/artifacts ]]; then
+            echo "No artifacts found, skipping manifest creation"
+            echo "skip=1" >> "$GITHUB_ENV"
+            exit
+          fi
+
           ls -lR /tmp/artifacts/
           jq -sc add /tmp/artifacts/*.json > merged.json
           echo "DIGESTS_JSON=$(cat merged.json)" >> $GITHUB_OUTPUT
           jq '.' merged.json
 
       - name: Sanity check
+        if: ${{ env.skip != 1 }}
         id: check
         env:
           DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
@@ -147,7 +147,16 @@ jobs:
           echo "vendor=$(echo ${DIGESTS_JSON} | jq -r '[.[] | .vendor] | unique | .[0]')" >> $GITHUB_OUTPUT
           echo "date=$(date -u +%Y\-%m\-%d\T%H\:%M\:%S\Z)" >> $GITHUB_OUTPUT
 
+      - name: Login to registry (docker)
+        if: ${{ env.skip != 1 }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.IMAGE_REGISTRY }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
       - name: Image Metadata
+        if: ${{ env.skip != 1 }}
         uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5
         id: metadata
         with:
@@ -171,6 +180,7 @@ jobs:
             org.opencontainers.image.description=AlmaLinux Bootable Container Image
 
       - name: Get a newer podman (from debian testing)
+        if: ${{ env.skip != 1 }}
         run: |
           set -eux
           echo 'deb [trusted=yes] https://ftp.debian.org/debian/ testing main' | sudo tee /etc/apt/sources.list.d/testing.list
@@ -178,6 +188,7 @@ jobs:
           sudo apt install -y crun/testing podman/testing
 
       - name: Create Manifest
+        if: ${{ env.skip != 1 }}
         id: create-manifest
         run: |
           IMAGE_DEST=${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -185,6 +196,7 @@ jobs:
           echo "MANIFEST=${IMAGE_DEST}" >> $GITHUB_OUTPUT
 
       - name: Populate Manifest
+        if: ${{ env.skip != 1 }}
         env:
           MANIFEST: ${{ steps.create-manifest.outputs.MANIFEST }}
           DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
@@ -209,6 +221,7 @@ jobs:
           done <<< "$LABELS"
 
       - name: Push Manifest
+        if: ${{ env.skip != 1 }}
         id: push_manifest
         env:
           MANIFEST: ${{ steps.create-manifest.outputs.MANIFEST }}
