@@ -127,9 +127,12 @@ runs:
         VERSION: ${{ steps.run.outputs.version-id }}
       shell: bash
       run: |
-        sudo podman push --digestfile=/tmp/digestfile ${{ env.IMAGE_ID }} \
-          docker://${IMAGE_DEST}:${{ env.VERSION }}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}
-
+        # The push fails for unknown reasons sometimes, so we'll retry it a few times
+        for i in {1..5}; do
+          sudo podman push --digestfile=/tmp/digestfile ${{ env.IMAGE_ID }} \
+            docker://${IMAGE_DEST}:${{ env.VERSION }}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} && break || sleep $((10*i))
+        done
+        [ -f /tmp/digestfile ] || exit 1
         echo "digest=$(cat /tmp/digestfile)" >> $GITHUB_OUTPUT
         sudo podman inspect ${{ env.IMAGE_ID }}
 
