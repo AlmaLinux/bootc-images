@@ -207,8 +207,8 @@ jobs:
           for platform in $(echo $DIGESTS_JSON | jq -r '. | to_entries | .[].key'); do
             digest=$(echo $DIGESTS_JSON | jq -r ".[\"$platform\"].digest")
             echo "Adding ${IMAGE_DEST}@$digest for $platform"
-            if [[ "$platform" == "amd64/v2" ]]; then
-              podman manifest add $MANIFEST ${IMAGE_DEST}@$digest --arch amd64 --variant v2
+            if [[ "$platform" = */v* ]]; then
+              podman manifest add $MANIFEST ${IMAGE_DEST}@$digest --arch ${platform%/*} --variant ${platform#*/}
             else
               podman manifest add $MANIFEST ${IMAGE_DEST}@$digest --arch $platform
             fi
