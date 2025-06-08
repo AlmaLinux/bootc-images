@@ -163,7 +163,7 @@ jobs:
           tags: |
             type=raw,value=latest,enable=${{ matrix.VERSION_MAJOR == env.LATEST_MAJOR }}
             type=raw,value=${{ matrix.VERSION_MAJOR }}
-            type=raw,value=${{ steps.check.outputs.version-id }}
+            type=raw,value=${{ steps.check.outputs.version-id }},enable=${{ matrix.VERSION_MAJOR != '10-kitten' }}
             type=raw,value=${{ steps.check.outputs.version-id }}-${{ env.DATE_STAMP }}
             type=raw,value=${{ steps.check.outputs.long-version }}
           labels: |
