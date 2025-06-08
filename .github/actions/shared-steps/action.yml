@@ -27,7 +27,6 @@ runs:
         echo "CLEAN_ARCH=${ARCH//\//_}" >> "$GITHUB_ENV"
 
     - name: Log in to registry
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
 
