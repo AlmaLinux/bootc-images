@@ -147,7 +147,6 @@ jobs:
           echo "long-version=$(echo ${DIGESTS_JSON} | jq -r '[.[] | .long_version] | unique | .[0]')" >> $GITHUB_OUTPUT
           echo "vendor=$(echo ${DIGESTS_JSON} | jq -r '[.[] | .vendor] | unique | .[0]')" >> $GITHUB_OUTPUT
           echo "date=$(date -u +%Y\-%m\-%d\T%H\:%M\:%S\Z)" >> $GITHUB_OUTPUT
-          echo "arches=$(echo "$DIGESTS_JSON" | jq -r '[keys[] | "linux/" + .] | sort | join(", ")')" >> $GITHUB_OUTPUT
 
       - name: Login to registry (docker)
         if: ${{ env.skip != 1 }}
@@ -244,6 +243,20 @@ jobs:
           echo "Pushed manifest to ${IMAGE_DEST} with digest $DIGEST"
           podman manifest inspect ${IMAGE_DEST}
 
+      - name: Format output for notification
+        id: format
+        env:
+          DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
+          TAGS: ${{ steps.metadata.outputs.tags }}
+        run: |
+          echo "arches=$(echo "$DIGESTS_JSON" | jq -r '[keys[] | "linux/" + .] | sort | join(", ")')" >> $GITHUB_OUTPUT
+          # Add two spaces before each tag (starting from the second line) so that it is formatted correctly in the notification
+          {
+            echo 'tags<<EOF'
+            printf "$TAGS" | awk 'NR==1{print; next} {print "  " $0}'
+            echo EOF
+          } >> $GITHUB_OUTPUT
+
       - name: Notify AlmaLinux Chat
         uses: mattermost/action-mattermost-notify@master
         with:
@@ -256,9 +269,9 @@ jobs:
             :almalinux: **${{ steps.push_manifest.outputs.image }}**
             - Platforms:
               ```
-              ${{ steps.check.outputs.arches }}
+              ${{ steps.format.outputs.arches }}
               ```
             - Tags:
               ```
-              ${{ steps.metadata.outputs.tags }}
+              ${{ steps.format.outputs.tags }}
               ```
