@@ -244,6 +244,7 @@ jobs:
           podman manifest inspect ${IMAGE_DEST}
 
       - name: Format output for notification
+        if: ${{ env.skip != 1 }}
         id: format
         env:
           DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
@@ -258,6 +259,7 @@ jobs:
           } >> $GITHUB_OUTPUT
 
       - name: Notify AlmaLinux Chat
+        if: ${{ env.skip != 1 }}
         uses: mattermost/action-mattermost-notify@master
         with:
           MATTERMOST_WEBHOOK_URL: ${{ secrets.MM_WEBHOOK_URL }}
