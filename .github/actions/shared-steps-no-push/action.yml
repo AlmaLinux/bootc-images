@@ -123,7 +123,7 @@ runs:
         IMAGE_ID: ${{ steps.rechunk.outputs.image-id }}
       run: |
         # Tag: VERSION_MAJOR.VERSION_MINOR-DATE_STAMP-ARCH
-        sudo podman tag
+        sudo podman tag \
           ${{ env.IMAGE_ID }} \
           ${IMAGE_NAME}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}-${{ inputs.DATE_STAMP }}-${{ env.ARCH }} && \
         sudo podman save \
