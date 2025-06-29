@@ -47,6 +47,7 @@ jobs:
     env:
       PLATFORM: linux/amd64
       DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
+      ARCH: amd64
 
     steps:
     - uses: actions/checkout@v4
@@ -63,7 +64,7 @@ jobs:
   build-arm64:
     name: arm64 image
     runs-on: ubuntu-24.04-arm
-    needs: [set-versions-matrix]
+    needs: [set-versions-matrix, set-specializations]
     strategy:
       fail-fast: false
       matrix:
@@ -77,6 +78,7 @@ jobs:
     env:
       PLATFORM: linux/arm64
       DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
+      ARCH: arm64
 
     steps:
     - uses: actions/checkout@v4
