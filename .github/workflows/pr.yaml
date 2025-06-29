@@ -7,6 +7,7 @@ env:
   LATEST_MAJOR: 9
   IMAGE_NAME: almalinux-bootc
   VERSIONS_LIST: '"9", "10-kitten", "10"'
+  SPECIALIZATION_LIST: [general, rpi]
 
 jobs:
   set-versions-matrix:
@@ -21,6 +22,12 @@ jobs:
         run: |
           # Format json for versions matrix
           echo "matrix=$(jq -c <<< '[${{ env.VERSIONS_LIST }}]')" >> $GITHUB_OUTPUT
+
+      - name: Set specializations
+        id: set-specializations
+        run: |
+          # Format json for specializations
+          echo "specializations=$(jq -c <<< '[${{ env.SPECIALIZATION_LIST }}]')" >> $GITHUB_OUTPUT
 
       - name: Date stamp
         id: date-stamp
@@ -37,6 +44,12 @@ jobs:
       fail-fast: false
       matrix:
         VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
+        SPECIALIZATION: ${{ fromJSON(needs.set-versions-matrix.outputs.specializations) }}
+        exclude:
+        - VERSION_MAJOR: "10"
+          SPECIALIZATION: "rpi"
+        - VERSION_MAJOR: "10-kitten"
+          SPECIALIZATION: "rpi"
 
     env:
       PLATFORM: linux/amd64
