@@ -1,0 +1,78 @@
+name: Build amd64 and arm64
+on:
+  pull_request:
+    types: [synchronize, opened, reopened]
+
+env:
+  LATEST_MAJOR: 9
+  IMAGE_NAME: almalinux-bootc
+  VERSIONS_LIST: '"9", "10-kitten", "10"'
+
+jobs:
+  set-versions-matrix:
+    name: Set versions matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      date_stamp: ${{ steps.date-stamp.outputs.date_stamp }}
+    steps:
+      - name: Set matrix
+        id: set-matrix
+        run: |
+          # Format json for versions matrix
+          echo "matrix=$(jq -c <<< '[${{ env.VERSIONS_LIST }}]')" >> $GITHUB_OUTPUT
+
+      - name: Date stamp
+        id: date-stamp
+        run: |
+          # date stamp
+          date_stamp=$(date -u '+%Y%m%d')
+          [ "x${date_stamp}" != "x" ] && echo "date_stamp=${date_stamp}" >> "$GITHUB_OUTPUT"
+
+  build-amd64:
+    name: amd64 image
+    runs-on: ubuntu-24.04
+    needs: [set-versions-matrix]
+    strategy:
+      fail-fast: false
+      matrix:
+        VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
+
+    env:
+      PLATFORM: linux/amd64
+      DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+
+    - uses: ./.github/actions/shared-steps
+      name: Build and No Push
+      with:
+        VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
+        DATE_STAMP: ${{ env.DATE_STAMP }}
+        IMAGE_REGISTRY: ${{ secrets.IMAGE_REGISTRY }}
+
+  build-arm64:
+    name: arm64 image
+    runs-on: ubuntu-24.04-arm
+    needs: [set-versions-matrix]
+    strategy:
+      fail-fast: false
+      matrix:
+        VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
+    env:
+      PLATFORM: linux/arm64
+      DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+
+    - uses: ./.github/actions/shared-steps
+      name: Build and No Push (${{ env.VERSION_MAJOR }})
+      with:
+        VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
+        DATE_STAMP: ${{ env.DATE_STAMP }}

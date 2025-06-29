@@ -1,0 +1,67 @@
+name: "Build and No Push"
+
+inputs:
+  VERSION_MAJOR:
+    required: true
+  DATE_STAMP:
+    required: true
+  IMAGE_REGISTRY:
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Prepare environment
+      shell: bash
+      run: |
+        # Platform / arch
+        platform="${{ env.PLATFORM }}"
+        ARCH=${platform#linux/}
+        [ "x${ARCH}" != "x" ] && echo "ARCH=${ARCH}" >> "$GITHUB_ENV"
+
+        # Platform / machine
+        MACHINE=x86_64
+        [ "$ARCH" = "arm64" ] && MACHINE=aarch64
+        echo "MACHINE=${MACHINE}" >> "$GITHUB_ENV"
+
+        # Minor version
+        VERSION_MINOR=
+        if [[ ${{ inputs.VERSION_MAJOR }} != *'kitten'* ]]; then
+          almalinux_release=https://repo.almalinux.org/almalinux/almalinux-release-latest-${{ inputs.VERSION_MAJOR }}.${MACHINE}.rpm
+          # TODO: remove when AlmaLinux 10.0 is released
+          [ "${{ inputs.VERSION_MAJOR }}" = "10" ] && almalinux_release=https://vault.almalinux.org/almalinux-release-latest-10-beta.${MACHINE}.rpm
+          release=$(rpm -q --qf="%{VERSION}\n" ${almalinux_release} 2>/dev/null)
+          VERSION_MINOR=.$(cut -d '.' -f 2 <<< "$release")
+        fi
+        echo "VERSION_MINOR=${VERSION_MINOR}" >> "$GITHUB_ENV"
+
+        # quay.io/almalinuxorg/almalinux-bootc
+        IMAGE_DEST=${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+        echo "IMAGE_DEST=${IMAGE_DEST}" >> "$GITHUB_ENV"
+
+    - name: Build image
+      if: ${{ env.res != 0 }}
+      shell: bash
+      run: |
+        make image \
+          PLATFORM=${{ env.PLATFORM }} \
+          IMAGE_NAME=${{ env.IMAGE_NAME }} \
+          VERSION_MAJOR=${{ inputs.VERSION_MAJOR }}
+
+    - name: Run Image
+      if: ${{ env.res != 0 }}
+      shell: bash
+      run: sudo podman run --rm -ti ${{ env.IMAGE_NAME }} bootc --version
+
+    - name: Push to registry
+      if: ${{ env.res != 0 }}
+      shell: bash
+      run: |
+        # Tag: VERSION_MAJOR.VERSION_MINOR-DATE_STAMP-ARCH
+        sudo podman save -o /tmp/image.tar \
+          docker://${IMAGE_DEST}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}-${{ inputs.DATE_STAMP }}-${{ env.ARCH }} && \
+        sudo gzip /tmp/image.tar
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: image.tar.gz
+        path: /tmp/image.tar.gz
