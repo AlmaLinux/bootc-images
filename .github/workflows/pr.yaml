@@ -44,13 +44,6 @@ jobs:
       fail-fast: false
       matrix:
         VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
-        SPECIALIZATION: ${{ fromJSON(needs.set-versions-matrix.outputs.specializations) }}
-        exclude:
-        - VERSION_MAJOR: "10"
-          SPECIALIZATION: "rpi"
-        - VERSION_MAJOR: "10-kitten"
-          SPECIALIZATION: "rpi"
-
     env:
       PLATFORM: linux/amd64
       DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
@@ -75,6 +68,12 @@ jobs:
       fail-fast: false
       matrix:
         VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
+        SPECIALIZATION: ${{ fromJSON(needs.set-versions-matrix.outputs.specializations) }}
+        exclude:
+        - VERSION_MAJOR: "10"
+          SPECIALIZATION: "rpi"
+        - VERSION_MAJOR: "10-kitten"
+          SPECIALIZATION: "rpi"
     env:
       PLATFORM: linux/arm64
       DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
@@ -85,7 +84,7 @@ jobs:
         submodules: true
 
     - uses: ./.github/actions/shared-steps-no-push
-      name: Build and No Push (${{ env.VERSION_MAJOR }})
+      name: Build and No Push (${{ env.VERSION_MAJOR }} - ${{ env.SPECIALIZATION }})
       with:
         VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
         DATE_STAMP: ${{ env.DATE_STAMP }}

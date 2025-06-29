@@ -117,12 +117,12 @@ runs:
         echo "long-version=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"').${{ inputs.DATE_STAMP }}.0" >> $GITHUB_OUTPUT
         echo "vendor=$(echo "$INFO" | grep "^VENDOR_NAME=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
 
-    - name: Push to registry
+    - name: Build image tarball
       shell: bash
       run: |
         # Tag: VERSION_MAJOR.VERSION_MINOR-DATE_STAMP-ARCH
         sudo podman save -o /tmp/image.tar \
-          docker://${IMAGE_DEST}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}-${{ inputs.DATE_STAMP }}-${{ env.ARCH }} && \
+          docker://${IMAGE_NAME}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}-${{ inputs.DATE_STAMP }}-${{ env.ARCH }} && \
         sudo gzip /tmp/image.tar
 
     - uses: actions/upload-artifact@v4
