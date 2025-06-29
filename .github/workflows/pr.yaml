@@ -47,7 +47,7 @@ jobs:
       with:
         submodules: true
 
-    - uses: ./.github/actions/shared-steps
+    - uses: ./.github/actions/shared-steps-no-push
       name: Build and No Push
       with:
         VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
