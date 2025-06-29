@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      specializations: ${{ steps.set-specializations.outputs.specializations }}
       date_stamp: ${{ steps.date-stamp.outputs.date_stamp }}
     steps:
       - name: Set matrix
