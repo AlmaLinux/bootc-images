@@ -128,10 +128,11 @@ runs:
           ${IMAGE_NAME}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}-${{ inputs.DATE_STAMP }}-${{ env.ARCH }} && \
         sudo podman save \
           ${IMAGE_NAME}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}-${{ inputs.DATE_STAMP }}-${{ env.ARCH }} > \
-          /tmp/image.tar && \
-        sudo gzip /tmp/image.tar
+          /tmp/image-${IMAGE_NAME}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}-${{ inputs.DATE_STAMP }}-${{ env.ARCH }}.tar && \
+        sudo gzip /tmp/image-${IMAGE_NAME}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}-${{ inputs.DATE_STAMP }}-${{ env.ARCH }}.tar && \
 
     - uses: actions/upload-artifact@v4
       with:
         name: image.tar.gz
-        path: /tmp/image.tar.gz
+        name: image-${IMAGE_NAME}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}-${{ inputs.DATE_STAMP }}-${{ env.ARCH }} && \
+        path: /tmp/image-${IMAGE_NAME}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}-${{ inputs.DATE_STAMP }}-${{ env.ARCH }}.tar.gz
