@@ -50,11 +50,13 @@ jobs:
         exclude:
           - VERSION_MAJOR: 9
             ARCH: amd64/v2
+          - VERSION_MAJOR: 9
+            ARCH: amd64
+            SPECIALIZATION: rpi
           - VERSION_MAJOR: 10
             SPECIALIZATION: rpi
           - VERSION_MAJOR: 10-kitten
             SPECIALIZATION: rpi
-
     env:
       PLATFORM: linux/${{ matrix.ARCH }}
       DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
