@@ -1,0 +1,75 @@
+name: Build amd64 and arm64
+on:
+  pull_request:
+    types: [synchronize, opened, reopened]
+
+env:
+  LATEST_MAJOR: 9
+  IMAGE_NAME: almalinux-bootc
+  VERSIONS_LIST: '"9", "10-kitten", "10"'
+  SPECIALIZATION_LIST: '"general", "rpi"'
+
+jobs:
+  set-versions-matrix:
+    name: Set versions matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      specializations: ${{ steps.set-specializations.outputs.specializations }}
+      date_stamp: ${{ steps.date-stamp.outputs.date_stamp }}
+    steps:
+      - name: Set matrix
+        id: set-matrix
+        run: |
+          # Format json for versions matrix
+          echo "matrix=$(jq -c <<< '[${{ env.VERSIONS_LIST }}]')" >> $GITHUB_OUTPUT
+
+      - name: Set specializations
+        id: set-specializations
+        run: |
+          # Format json for specializations
+          echo "specializations=$(jq -c <<< '[${{ env.SPECIALIZATION_LIST }}]')" >> $GITHUB_OUTPUT
+
+      - name: Date stamp
+        id: date-stamp
+        run: |
+          # date stamp
+          date_stamp=$(date -u '+%Y%m%d')
+          [ "x${date_stamp}" != "x" ] && echo "date_stamp=${date_stamp}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build image
+    runs-on: ${{ matrix.ARCH == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    needs: [set-versions-matrix]
+    strategy:
+      fail-fast: false
+      matrix:
+        VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
+        ARCH: [amd64, arm64, amd64/v2]
+        SPECIALIZATION: ${{ fromJSON(needs.set-versions-matrix.outputs.specializations) }}
+        exclude:
+          - VERSION_MAJOR: 9
+            ARCH: amd64/v2
+          - VERSION_MAJOR: 9
+            ARCH: amd64
+            SPECIALIZATION: rpi
+          - VERSION_MAJOR: 10
+            SPECIALIZATION: rpi
+          - VERSION_MAJOR: 10-kitten
+            SPECIALIZATION: rpi
+    env:
+      PLATFORM: linux/${{ matrix.ARCH }}
+      DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+
+    - uses: ./.github/actions/shared-steps-no-push
+      name: Build and No Push (${{ env.VERSION_MAJOR }} - ${{ matrix.SPECIALIZATION }})
+      with:
+        VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
+        DATE_STAMP: ${{ env.DATE_STAMP }}
+        IMAGE_REGISTRY: ${{ secrets.IMAGE_REGISTRY }}
+        SPECIALIZATION: ${{ matrix.SPECIALIZATION }}
