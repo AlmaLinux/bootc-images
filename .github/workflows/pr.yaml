@@ -7,7 +7,7 @@ env:
   LATEST_MAJOR: 9
   IMAGE_NAME: almalinux-bootc
   VERSIONS_LIST: '"9", "10-kitten", "10"'
-  SPECIALIZATION_LIST: [general, rpi]
+  SPECIALIZATION_LIST: '"general", "rpi"'
 
 jobs:
   set-versions-matrix:
