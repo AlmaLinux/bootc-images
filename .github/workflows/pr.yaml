@@ -67,7 +67,7 @@ jobs:
         submodules: true
 
     - uses: ./.github/actions/shared-steps-no-push
-      name: Build and No Push (${{ env.VERSION_MAJOR }} - ${{ env.SPECIALIZATION }})
+      name: Build and No Push (${{ env.VERSION_MAJOR }} - ${{ matrix.SPECIALIZATION }})
       with:
         VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
         DATE_STAMP: ${{ env.DATE_STAMP }}

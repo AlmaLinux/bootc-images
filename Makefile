@@ -7,9 +7,9 @@ SPECIALIZATION = general
 LABELS ?=
 
 ifeq ($(SPECIALIZATION), general)
-    SUFFIX = ""
+    SUFFIX =
 else
-    SUFFIX = $(SUFFIX)
+    SUFFIX = -$(SPECIALIZATION)
 endif
 
 .ONESHELL:
