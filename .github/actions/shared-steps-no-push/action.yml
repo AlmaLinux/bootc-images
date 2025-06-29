@@ -83,7 +83,7 @@ runs:
           PLATFORM=${{ env.PLATFORM }} \
           LABELS="${ALL_LABELS}" \
           IMAGE_NAME=${{ env.IMAGE_NAME }} \
-          VERSION_MAJOR=${{ inputs.VERSION_MAJOR }}
+          VERSION_MAJOR=${{ inputs.VERSION_MAJOR }} \
           SPECIALIZATION=${{ inputs.SPECIALIZATION }} \
 
         echo "image-id=$(cat /tmp/image-id)" >> $GITHUB_OUTPUT
