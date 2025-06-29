@@ -50,6 +50,8 @@ jobs:
         exclude:
           - VERSION_MAJOR: 9
             ARCH: amd64/v2
+          - VERSION_MAJOR: 9
+            SPECIALIZATION: rpi
           - VERSION_MAJOR: 10
             SPECIALIZATION: rpi
           - VERSION_MAJOR: 10-kitten
