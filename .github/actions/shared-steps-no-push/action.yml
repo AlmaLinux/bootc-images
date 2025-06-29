@@ -7,48 +7,115 @@ inputs:
     required: true
   IMAGE_REGISTRY:
     required: true
+  REGISTRY_USER:
+    required: true
+  REGISTRY_PASSWORD:
+    required: true
 runs:
   using: "composite"
   steps:
     - name: Prepare environment
       shell: bash
       run: |
-        # Platform / arch
-        platform="${{ env.PLATFORM }}"
-        ARCH=${platform#linux/}
-        [ "x${ARCH}" != "x" ] && echo "ARCH=${ARCH}" >> "$GITHUB_ENV"
-
-        # Platform / machine
-        MACHINE=x86_64
-        [ "$ARCH" = "arm64" ] && MACHINE=aarch64
-        echo "MACHINE=${MACHINE}" >> "$GITHUB_ENV"
-
-        # Minor version
-        VERSION_MINOR=
-        if [[ ${{ inputs.VERSION_MAJOR }} != *'kitten'* ]]; then
-          almalinux_release=https://repo.almalinux.org/almalinux/almalinux-release-latest-${{ inputs.VERSION_MAJOR }}.${MACHINE}.rpm
-          # TODO: remove when AlmaLinux 10.0 is released
-          [ "${{ inputs.VERSION_MAJOR }}" = "10" ] && almalinux_release=https://vault.almalinux.org/almalinux-release-latest-10-beta.${MACHINE}.rpm
-          release=$(rpm -q --qf="%{VERSION}\n" ${almalinux_release} 2>/dev/null)
-          VERSION_MINOR=.$(cut -d '.' -f 2 <<< "$release")
-        fi
-        echo "VERSION_MINOR=${VERSION_MINOR}" >> "$GITHUB_ENV"
+        echo "VARIANT=--platform ${{ env.PLATFORM }}" >> "$GITHUB_ENV"
 
         # quay.io/almalinuxorg/almalinux-bootc
         IMAGE_DEST=${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
         echo "IMAGE_DEST=${IMAGE_DEST}" >> "$GITHUB_ENV"
 
-    - name: Build image
+        ARCH=${{ matrix.ARCH }}
+        echo "CLEAN_ARCH=${ARCH//\//_}" >> "$GITHUB_ENV"
+
+    - name: Log in to registry
+      shell: bash
+      run: sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
+
+    - name: Check update
       shell: bash
       run: |
+        # 'dnf check-update'
+        # exit codes:
+        #   0 - no updates
+        #   100 - updates available
+        #   125 - tag/platform not found
+        #   127 - command not found
+        res=100
+        echo "res=${res}" >> "$GITHUB_ENV"
+        echo "Exit code: '$res'"
+
+    - name: Get info
+      id: info
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      shell: bash
+      run: |
+        INFO=$(sudo podman run ${{ env.VARIANT }} --quiet --rm quay.io/almalinuxorg/${{ inputs.VERSION_MAJOR }}-base bash -c "dnf upgrade -y almalinux-release && rpm -q almalinux-gpg-keys && cat /etc/os-release" || true)
+        echo "$INFO"
+
+        echo "id=$(echo "$INFO" | grep "^ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
+        echo "version-id=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
+        echo "long-version=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"').${{ inputs.DATE_STAMP }}.0" >> $GITHUB_OUTPUT
+
+    - name: Build image
+      id: build
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      shell: bash
+      run: |
+        BUILD_TIME=$(date -Iseconds)
+
+        # define a multiline variable with heredoc
+        LABELS=$(cat <<EOF
+        redhat.id=${{ steps.info.outputs.id }}
+        redhat.version-id=${{ steps.info.outputs.version-id }}
+        version=${{ steps.info.outputs.version-id }}
+        release=${{ steps.info.outputs.version-id }}
+        build-date=${BUILD_TIME}
+        org.opencontainers.image.created=${BUILD_TIME}
+        org.opencontainers.image.version=${{ steps.info.outputs.long-version }}
+        org.opencontainers.image.source=${{ github.repositoryUrl }}
+        org.opencontainers.image.title=${{ env.IMAGE_NAME }}
+        org.opencontainers.image.url=${{ github.event.repository.html_url }}
+        EOF
+        )
+
+        while IFS= read -r label; do
+          ALL_LABELS="$ALL_LABELS --label=\"$label\" --annotation=\"$label\""
+        done <<< "$LABELS"
+
         make image \
           PLATFORM=${{ env.PLATFORM }} \
+          LABELS="${ALL_LABELS}" \
           IMAGE_NAME=${{ env.IMAGE_NAME }} \
           VERSION_MAJOR=${{ inputs.VERSION_MAJOR }}
 
-    - name: Run Image
+        echo "image-id=$(cat /tmp/image-id)" >> $GITHUB_OUTPUT
+
+    - name: rechunk image
+      id: rechunk
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
-      run: sudo podman run --rm -ti ${{ env.IMAGE_NAME }} bootc --version
+      run: |
+        make rechunk \
+          PLATFORM=${{ env.PLATFORM }} \
+          IMAGE_NAME=${{ env.IMAGE_NAME }}
+
+        echo "image-id=sha256:$(sudo podman image inspect ${{ env.IMAGE_NAME }} -f "{{.Id}}")" >> $GITHUB_OUTPUT
+
+    - name: Run Image
+      id: run
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      shell: bash
+      env:
+        IMAGE_ID: ${{ steps.rechunk.outputs.image-id }}
+      run: |
+        sudo podman run ${{ env.VARIANT }} --rm -ti ${{ env.IMAGE_ID }} bootc --version
+
+        INFO=$(sudo podman run ${{ env.VARIANT }} --rm ${{ env.IMAGE_ID }} bash -c "rpm -q almalinux-gpg-keys && cat /etc/os-release")
+        echo "$INFO"
+
+        echo "id=$(echo "$INFO" | grep "^ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
+        echo "version-id=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
+        echo "long-version=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"').${{ inputs.DATE_STAMP }}.0" >> $GITHUB_OUTPUT
+        echo "vendor=$(echo "$INFO" | grep "^VENDOR_NAME=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
 
     - name: Push to registry
       shell: bash
