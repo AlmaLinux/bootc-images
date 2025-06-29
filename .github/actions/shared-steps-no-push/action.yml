@@ -26,9 +26,9 @@ runs:
         ARCH=${{ matrix.ARCH }}
         echo "CLEAN_ARCH=${ARCH//\//_}" >> "$GITHUB_ENV"
 
-    - name: Log in to registry
-      shell: bash
-      run: sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
+    #- name: Log in to registry
+    #  shell: bash
+    #  run: sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
 
     - name: Check update
       shell: bash
