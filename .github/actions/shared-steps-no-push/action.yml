@@ -84,7 +84,7 @@ runs:
           LABELS="${ALL_LABELS}" \
           IMAGE_NAME=${{ env.IMAGE_NAME }} \
           VERSION_MAJOR=${{ inputs.VERSION_MAJOR }}
-          SPECIALIZATION=${{ env.SPECIALIZATION }} \
+          SPECIALIZATION=${{ matrix.SPECIALIZATION }} \
 
         echo "image-id=$(cat /tmp/image-id)" >> $GITHUB_OUTPUT
 
@@ -136,13 +136,13 @@ runs:
         # Tag: VERSION_MAJOR.VERSION_MINOR-DATE_STAMP-ARCH
         sudo podman tag \
           ${{ env.IMAGE_ID }} \
-          ${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ matrix.ARCH }} && \
+          ${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} && \
         sudo podman save \
-          ${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ matrix.ARCH }} > \
-          /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ matrix.ARCH }}.tar && \
-        sudo gzip /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ matrix.ARCH }}.tar
+          ${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} > \
+          /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.tar && \
+        sudo gzip /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.tar
 
     - uses: actions/upload-artifact@v4
       with:
-        name: image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ matrix.ARCH }}
-        path: /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ matrix.ARCH }}.tar.gz
+        name: image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}
+        path: /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.tar.gz
