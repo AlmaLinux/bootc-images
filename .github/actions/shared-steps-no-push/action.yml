@@ -7,7 +7,7 @@ inputs:
     required: true
   IMAGE_REGISTRY:
     required: true
-  SUFFIX:
+  SPECIALIZATION:
     required: true
 runs:
   using: "composite"
@@ -84,7 +84,7 @@ runs:
           LABELS="${ALL_LABELS}" \
           IMAGE_NAME=${{ env.IMAGE_NAME }} \
           VERSION_MAJOR=${{ inputs.VERSION_MAJOR }}
-          SPECIALIZATION=${{ matrix.SPECIALIZATION }} \
+          SPECIALIZATION=${{ inputs.SPECIALIZATION }} \
 
         echo "image-id=$(cat /tmp/image-id)" >> $GITHUB_OUTPUT
 
@@ -121,10 +121,10 @@ runs:
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: |
-        if [ 'x${{ matrix.SPECIALIZATION }}' == 'xgeneral' ]; then
+        if [ 'x${{ inputs.SPECIALIZATION }}' == 'xgeneral' ]; then
           echo "suffix=" >> $GITHUB_OUTPUT
         else
-          echo "suffix=-${{ matrix.SPECIALIZATION }}" >> $GITHUB_OUTPUT
+          echo "suffix=-${{ inputs.SPECIALIZATION }}" >> $GITHUB_OUTPUT
         fi
 
     - name: Build image tarball

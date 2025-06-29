@@ -72,3 +72,4 @@ jobs:
         VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
         DATE_STAMP: ${{ env.DATE_STAMP }}
         IMAGE_REGISTRY: ${{ secrets.IMAGE_REGISTRY }}
+        SPECIALIZATION: ${{ matrix.SPECIALIZATION }}
