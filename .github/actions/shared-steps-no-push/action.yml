@@ -39,7 +39,6 @@ runs:
         echo "IMAGE_DEST=${IMAGE_DEST}" >> "$GITHUB_ENV"
 
     - name: Build image
-      if: ${{ env.res != 0 }}
       shell: bash
       run: |
         make image \
@@ -48,12 +47,10 @@ runs:
           VERSION_MAJOR=${{ inputs.VERSION_MAJOR }}
 
     - name: Run Image
-      if: ${{ env.res != 0 }}
       shell: bash
       run: sudo podman run --rm -ti ${{ env.IMAGE_NAME }} bootc --version
 
     - name: Push to registry
-      if: ${{ env.res != 0 }}
       shell: bash
       run: |
         # Tag: VERSION_MAJOR.VERSION_MINOR-DATE_STAMP-ARCH
