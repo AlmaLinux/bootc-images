@@ -119,6 +119,8 @@ runs:
 
     - name: Build image tarball
       shell: bash
+      env:
+        IMAGE_ID: ${{ steps.rechunk.outputs.image-id }}
       run: |
         # Tag: VERSION_MAJOR.VERSION_MINOR-DATE_STAMP-ARCH
         sudo podman tag
