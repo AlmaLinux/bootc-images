@@ -36,49 +36,27 @@ jobs:
           date_stamp=$(date -u '+%Y%m%d')
           [ "x${date_stamp}" != "x" ] && echo "date_stamp=${date_stamp}" >> "$GITHUB_OUTPUT"
 
-  build-amd64:
-    name: amd64 image
-    runs-on: ubuntu-24.04
+  build:
+    name: Build image
+    runs-on: ${{ matrix.ARCH == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     needs: [set-versions-matrix]
     strategy:
       fail-fast: false
       matrix:
         VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
-    env:
-      PLATFORM: linux/amd64
-      DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
-      ARCH: amd64
-
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-
-    - uses: ./.github/actions/shared-steps-no-push
-      name: Build and No Push
-      with:
-        VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
-        DATE_STAMP: ${{ env.DATE_STAMP }}
-        IMAGE_REGISTRY: ${{ secrets.IMAGE_REGISTRY }}
-
-  build-arm64:
-    name: arm64 image
-    runs-on: ubuntu-24.04-arm
-    needs: [set-versions-matrix]
-    strategy:
-      fail-fast: false
-      matrix:
-        VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
+        ARCH: [amd64, arm64, amd64/v2]
         SPECIALIZATION: ${{ fromJSON(needs.set-versions-matrix.outputs.specializations) }}
         exclude:
-        - VERSION_MAJOR: "10"
-          SPECIALIZATION: "rpi"
-        - VERSION_MAJOR: "10-kitten"
-          SPECIALIZATION: "rpi"
+          - VERSION_MAJOR: 9
+            ARCH: amd64/v2
+          - VERSION_MAJOR: 10
+            SPECIALIZATION: rpi
+          - VERSION_MAJOR: 10-kitten
+            SPECIALIZATION: rpi
+
     env:
-      PLATFORM: linux/arm64
+      PLATFORM: linux/${{ matrix.ARCH }}
       DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
-      ARCH: arm64
 
     steps:
     - uses: actions/checkout@v4
@@ -90,3 +68,4 @@ jobs:
       with:
         VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
         DATE_STAMP: ${{ env.DATE_STAMP }}
+        IMAGE_REGISTRY: ${{ secrets.IMAGE_REGISTRY }}

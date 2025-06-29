@@ -7,10 +7,6 @@ inputs:
     required: true
   IMAGE_REGISTRY:
     required: true
-  REGISTRY_USER:
-    required: true
-  REGISTRY_PASSWORD:
-    required: true
 runs:
   using: "composite"
   steps:
@@ -133,5 +129,5 @@ runs:
 
     - uses: actions/upload-artifact@v4
       with:
-        name: image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}-${{ inputs.DATE_STAMP }}-${{ env.ARCH }} && \
+        name: image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}-${{ inputs.DATE_STAMP }}-${{ env.ARCH }}
         path: /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}-${{ inputs.DATE_STAMP }}-${{ env.ARCH }}.tar.gz
