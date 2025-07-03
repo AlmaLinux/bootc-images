@@ -23,7 +23,7 @@ env:
   LATEST_MAJOR: 9
   IMAGE_NAME: almalinux-bootc
   VERSIONS_LIST: '"9", "10-kitten", "10"'
-  SPECIALIZATION_LIST: '"general", "rpi"'
+  VARIANT_LIST: '"general", "rpi"'
   CHAT_CHANNEL: sigcloud
 
 jobs:
@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
-      specializations: ${{ steps.set-specializations.outputs.specializations }}
+      variants: ${{ steps.set-variants.outputs.variants }}
       date_stamp: ${{ steps.date-stamp.outputs.date_stamp }}
     steps:
       - name: Set matrix
@@ -55,11 +55,11 @@ jobs:
               ;;
           esac
 
-      - name: Set specializations
-        id: set-specializations
+      - name: Set variants
+        id: set-variants
         run: |
-          # Format json for specializations
-          echo "specializations=$(jq -c <<< '[${{ env.SPECIALIZATION_LIST }}]')" >> $GITHUB_OUTPUT
+          # Format json for variants
+          echo "variants=$(jq -c <<< '[${{ env.VARIANT_LIST }}]')" >> $GITHUB_OUTPUT
 
       - name: Date stamp
         id: date-stamp
@@ -77,17 +77,17 @@ jobs:
       matrix:
         VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
         ARCH: [amd64, arm64, amd64/v2]
-        SPECIALIZATION: ${{ fromJSON(needs.set-versions-matrix.outputs.specializations) }}
+        VARIANT: ${{ fromJSON(needs.set-versions-matrix.outputs.variants) }}
         exclude:
           - VERSION_MAJOR: 9
             ARCH: amd64/v2
           - VERSION_MAJOR: 9
             ARCH: amd64
-            SPECIALIZATION: rpi
+            VARIANT: rpi
           - VERSION_MAJOR: 10
-            SPECIALIZATION: rpi
+            VARIANT: rpi
           - VERSION_MAJOR: 10-kitten
-            SPECIALIZATION: rpi
+            VARIANT: rpi
 
     env:
       PLATFORM: linux/${{ matrix.ARCH }}
@@ -104,7 +104,7 @@ jobs:
         VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
         DATE_STAMP: ${{ env.DATE_STAMP }}
         IMAGE_REGISTRY: ${{ secrets.IMAGE_REGISTRY }}
-        SPECIALIZATION: ${{ matrix.SPECIALIZATION }}
+        VARIANT: ${{ matrix.VARIANT }}
         REGISTRY_USER:  ${{ secrets.REGISTRY_USER }}
         REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 

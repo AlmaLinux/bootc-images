@@ -3,13 +3,13 @@ PODMAN = sudo podman
 IMAGE_NAME = almalinux-bootc
 VERSION_MAJOR = 10
 PLATFORM = linux/amd64
-SPECIALIZATION = general
+VARIANT = general
 LABELS ?=
 
-ifeq ($(SPECIALIZATION), general)
+ifeq ($(VARIANT), general)
     SUFFIX =
 else
-    SUFFIX = -$(SPECIALIZATION)
+    SUFFIX = -$(VARIANT)
 endif
 
 .ONESHELL:

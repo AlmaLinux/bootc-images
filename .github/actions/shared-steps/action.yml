@@ -7,7 +7,7 @@ inputs:
     required: true
   IMAGE_REGISTRY:
     required: true
-  SPECIALIZATION:
+  VARIANT:
     required: true
   REGISTRY_USER:
     required: true
@@ -32,12 +32,12 @@ runs:
       id: suffix
       shell: bash
       run: |
-        if [ 'x${{ inputs.SPECIALIZATION }}' == 'xgeneral' ]; then
+        if [ 'x${{ inputs.VARIANT }}' == 'xgeneral' ]; then
           echo "suffix=" >> $GITHUB_OUTPUT
           echo "clean_suffix=" >> $GITHUB_OUTPUT
         else
-          echo "suffix=-${{ inputs.SPECIALIZATION }}" >> $GITHUB_OUTPUT
-          echo "clean_suffix=_${{ inputs.SPECIALIZATION }}" >> $GITHUB_OUTPUT
+          echo "suffix=-${{ inputs.VARIANT }}" >> $GITHUB_OUTPUT
+          echo "clean_suffix=_${{ inputs.VARIANT }}" >> $GITHUB_OUTPUT
         fi
 
     - name: Log in to registry
@@ -107,7 +107,7 @@ runs:
           LABELS="${ALL_LABELS}" \
           IMAGE_NAME=${{ env.IMAGE_NAME }} \
           VERSION_MAJOR=${{ inputs.VERSION_MAJOR }} \
-          SPECIALIZATION=${{ inputs.SPECIALIZATION }}
+          VARIANT=${{ inputs.VARIANT }}
 
         echo "image-id=$(cat /tmp/image-id)" >> $GITHUB_OUTPUT
 
