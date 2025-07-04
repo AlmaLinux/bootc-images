@@ -109,7 +109,7 @@ jobs:
         REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 
   push-manifest:
-    if: ${{ always() && contains(join(needs.*.result, ','), 'success') && github.event_name != 'pull_request' }}
+    if: ${{ always() && contains(join(needs.*.result, ','), 'success') && github.event_name != 'pull_request' && matrix.VARIANT == "generic" }}
     name: Push manifest
     needs: [set-versions-matrix, build]
     runs-on: ubuntu-24.04
