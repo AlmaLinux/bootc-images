@@ -84,8 +84,6 @@ jobs:
           - VERSION_MAJOR: 9
             ARCH: amd64
             VARIANT: rpi
-          - VERSION_MAJOR: 10
-            VARIANT: rpi
           - VERSION_MAJOR: 10-kitten
             VARIANT: rpi
 

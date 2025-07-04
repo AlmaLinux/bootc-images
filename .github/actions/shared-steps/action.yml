@@ -122,6 +122,61 @@ runs:
 
         echo "image-id=sha256:$(sudo podman image inspect ${{ env.IMAGE_NAME }} -f "{{.Id}}")" >> $GITHUB_OUTPUT
 
+    - name: Build Image Tars
+      id: tars
+      if: github.event_name == 'pull_request'
+      shell: bash
+      env:
+        IMAGE_ID: ${{ steps.rechunk.outputs.image-id }}
+        SUFFIX: ${{ steps.suffix.outputs.suffix }}
+      run: |
+        sudo podman tag \
+          ${{ env.IMAGE_ID }} \
+          localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} && \
+        sudo podman save \
+          ${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} > \
+          /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.tar && \
+        sudo gzip /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.tar
+
+    - name: Build os image
+      if: inputs.SPECIALIZATION == 'rpi'
+      shell: bash
+      env:
+        IMAGE_ID: ${{ steps.rechunk.outputs.image-id }}
+        SUFFIX: ${{ steps.suffix.outputs.suffix }}
+      run: |
+        mkdir -p output && \
+        sudo podman run \
+           --rm \
+           -i \
+           --privileged \
+           --security-opt label=type:unconfined_t \
+           -v $(pwd)/output:/output \
+           -v /var/lib/containers/storage:/var/lib/containers/storage \
+           quay.io/centos-bootc/bootc-image-builder:latest \
+           --type raw \
+           --rootfs xfs \
+           --local \
+           localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} && \
+           ls -l output/image && \
+        sudo cp output/image/disk.raw /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}5-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw && \
+        sudo mv output/image/disk.raw /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw && \
+        mkdir -p /tmp/mnt && \
+        LOOP=$(sudo losetup -f --show -P /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}5-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw) && \
+        sudo mount ${LOOP}p1 /tmp/mnt && \
+        cd /tmp && \
+        curl -L -O https://github.com/worproject/rpi5-uefi/releases/download/v0.3/RPi5_UEFI_Release_v0.3.zip && \
+        sudo /bin/bash -c "cd mnt && unzip ../RPi5_UEFI_Release_v0.3.zip" && \
+        sudo podman run \
+          --rm \
+          -i \
+          -v /tmp/mnt:/tmp \
+          --entrypoint /bin/bash \
+          localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} \
+          -c "cp /usr/share/raspberrypi2-kernel*/*/boot/bcm2712-rpi-5-b.dtb /tmp/bcm2712-rpi-5-b.dtb" && \
+        sudo umount /tmp/mnt && \
+        sudo gzip /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}5-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw
+
     - name: Run Image
       id: run
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
@@ -177,6 +232,25 @@ runs:
           > /tmp/outputs/digests/${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}${{ env.CLEAN_SUFFIX }}_${{ env.CLEAN_ARCH }}.json
 
         cat /tmp/outputs/digests/${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}${{ env.CLEAN_SUFFIX }}_${{ env.CLEAN_ARCH }}.json
+
+    - name: Upload Container Image Artifacts
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      if: ${{ github.event_name == 'pull_request' }}
+      env:
+        SUFFIX: ${{ steps.suffix.outputs.suffix }}
+      with:
+        name: image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.tar.gz
+        path: /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.tar.gz
+        retention-days: 1
+        if-no-files-found: error
+
+    - uses: actions/upload-artifact@v4
+      if: inputs.SPECIALIZATION == 'rpi'
+      env:
+        SUFFIX: ${{ steps.suffix.outputs.suffix }}
+      with:
+        name: image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}5-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw.gz
+        path: /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}5-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw.gz
 
     - name: Upload Output Artifacts
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}

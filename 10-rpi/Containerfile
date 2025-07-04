@@ -1,0 +1,27 @@
+FROM quay.io/almalinuxorg/10-base:10 as repos
+FROM quay.io/centos-bootc/centos-bootc:stream10 as builder
+
+RUN rm -rf /etc/yum.repos.d/*
+
+COPY --from=repos /etc/yum.repos.d/*.repo /etc/yum.repos.d/
+COPY --from=repos /etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-10 /etc/pki/rpm-gpg
+
+COPY 10-rpi/almalinux-raspberrypi.repo  /etc/yum.repos.d/
+COPY 10-rpi/almalinux-10-rpi.yaml /usr/share/doc/bootc-base-imagectl/manifests/
+COPY 10-rpi/kernel.yaml /usr/share/doc/bootc-base-imagectl/manifests/minimal/
+
+RUN sed -i 's/efibootmgr//g' /usr/share/doc/bootc-base-imagectl/manifests/minimal/bootupd.yaml
+
+RUN /usr/libexec/bootc-base-imagectl build-rootfs --manifest=almalinux-10-rpi /target-rootfs
+
+###
+
+FROM scratch
+
+COPY --from=builder /target-rootfs/ /
+
+LABEL containers.bootc 1
+LABEL ostree.bootable 1
+
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]
