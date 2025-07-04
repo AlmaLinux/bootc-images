@@ -84,9 +84,13 @@ jobs:
           - VERSION_MAJOR: 9
             ARCH: amd64
             VARIANT: rpi
-          - VERSION_MAJOR: 10
-            VARIANT: rpi
           - VERSION_MAJOR: 10-kitten
+            VARIANT: rpi
+          - VERSION_MAJOR: 10
+            ARCH: amd64/v2
+            VARIANT: rpi
+          - VERSION_MAJOR: 10
+            ARCH: amd64
             VARIANT: rpi
 
     env:
@@ -109,7 +113,7 @@ jobs:
         REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 
   push-manifest:
-    if: ${{ always() && contains(join(needs.*.result, ','), 'success') && github.event_name != 'pull_request' && matrix.VARIANT == "generic" }}
+    if: ${{ always() && contains(join(needs.*.result, ','), 'success') && github.event_name != 'pull_request' && needs.set-versions-matrix.outputs.variants == 'generic' }}
     name: Push manifest
     needs: [set-versions-matrix, build]
     runs-on: ubuntu-24.04
