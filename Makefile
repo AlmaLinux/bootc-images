@@ -1,6 +1,6 @@
 PODMAN = sudo podman
 
-IMAGE_NAME = almalinux-bootc
+IMAGE_NAME = almalinux-bootc-rpi
 VERSION_MAJOR = 10
 PLATFORM = linux/amd64
 LABELS ?=

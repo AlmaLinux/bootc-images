@@ -6,7 +6,7 @@
 
 Official pre-built experimental images are available on Quay.io:
 
-* **[quay.io/almalinuxorg/almalinux-bootc](https://quay.io/repository/almalinuxorg/almalinux-bootc?tab=tags)**
+* **[quay.io/almalinuxorg/almalinux-bootc-rpi](https://quay.io/repository/almalinuxorg/almalinux-bootc-rpi?tab=tags)**
 
 This project provides tooling to build experimental AlmaLinux bootable container images. These images leverage the [bootc project](https://containers.github.io/bootc/), which enables the creation of bootable OS images from container images.
 
@@ -37,35 +37,35 @@ The following examples demonstrate how to build specific variants:
 
 ```bash
 make \
-  PLATFORM=linux/amd64 \
-  IMAGE_NAME=almalinux-bootc \
-  VERSION_MAJOR=10-kitten
+  PLATFORM=linux/arm64 \
+  IMAGE_NAME=almalinux-bootc-rpi \
+  VERSION_MAJOR=10-kitten-rpi
 ```
 
-### Example: AlmaLinux OS 10 (x86_64-v2)
+### Example: AlmaLinux OS 10 (arm64)
 
 ```bash
 make \
-  PLATFORM=linux/amd64/v2 \
-  IMAGE_NAME=almalinux-bootc \
-  VERSION_MAJOR=10-kitten
+  PLATFORM=linux/arm64 \
+  IMAGE_NAME=almalinux-bootc-rpi \
+  VERSION_MAJOR=10-rpi
 ```
 
   
-### Example: AlmaLinux 9 (x86_64)
+### Example: AlmaLinux 9 (arm64)
 
 ```  
 make \  
-  PLATFORM=linux/amd64 \  
-  IMAGE_NAME=almalinux-bootc \  
-  VERSION_MAJOR=9  
+  PLATFORM=linux/arm64 \
+  IMAGE_NAME=almalinux-bootc-rpi \
+  VERSION_MAJOR=9-rpi
 ```
 
 **Explanation of Build Variables:**
 
-* `PLATFORM`: Specifies the target architecture and variant (e.g., linux/amd64, linux/amd64/v2, linux/arm64).  
-* `IMAGE_NAME`: The base name for the output container image. (e.g. almalinux-bootc) 
-* `VERSION_MAJOR`: The AlmaLinux major version (e.g., 9, 10, 10-kitten).
+* `PLATFORM`: Specifies the target architecture and variant (e.g., linux/arm64).
+* `IMAGE_NAME`: The base name for the output container image. (e.g. almalinux-bootc-rpi)
+* `VERSION_MAJOR`: The AlmaLinux major version (e.g., 9-rpi, 10-rpi, 10-kitten-rpi).
 
 ## Contributing and Community
 

@@ -7,6 +7,8 @@ inputs:
     required: true
   IMAGE_REGISTRY:
     required: true
+  VARIANT:
+    required: true
   REGISTRY_USER:
     required: true
   REGISTRY_PASSWORD:
@@ -19,7 +21,7 @@ runs:
       run: |
         echo "VARIANT=--platform ${{ env.PLATFORM }}" >> "$GITHUB_ENV"
 
-        # quay.io/almalinuxorg/almalinux-bootc
+        # quay.io/almalinuxorg/almalinux-bootc-rpi
         IMAGE_DEST=${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
         echo "IMAGE_DEST=${IMAGE_DEST}" >> "$GITHUB_ENV"
 
@@ -27,6 +29,7 @@ runs:
         echo "CLEAN_ARCH=${ARCH//\//_}" >> "$GITHUB_ENV"
 
     - name: Log in to registry
+      if: github.event_name != 'pull_request'
       shell: bash
       run: sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
 
@@ -40,6 +43,9 @@ runs:
         #   125 - tag/platform not found
         #   127 - command not found
         res=0
+        if [ "${{ github.event_name }}" != "pull_request" ]; then
+          exit 100
+        fi
         sudo podman run ${{ env.VARIANT }} --quiet --rm ${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }} dnf check-update || res=$?
         echo "res=${res}" >> "$GITHUB_ENV"
         echo "Exit code: '$res'"
@@ -86,7 +92,8 @@ runs:
           PLATFORM=${{ env.PLATFORM }} \
           LABELS="${ALL_LABELS}" \
           IMAGE_NAME=${{ env.IMAGE_NAME }} \
-          VERSION_MAJOR=${{ inputs.VERSION_MAJOR }}
+          VERSION_MAJOR=${{ inputs.VERSION_MAJOR }} \
+          VARIANT=${{ inputs.VARIANT }}
 
         echo "image-id=$(cat /tmp/image-id)" >> $GITHUB_OUTPUT
 
@@ -120,7 +127,7 @@ runs:
 
     - name: Push to registry
       id: push
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      if: ${{ (env.res != 0 || github.event_name == 'workflow_dispatch') && github.event_name != 'pull_request' }}
       env:
         IMAGE_ID: ${{ steps.rechunk.outputs.image-id }}
         VERSION: ${{ steps.run.outputs.version-id }}

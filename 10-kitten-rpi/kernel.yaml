@@ -1,0 +1,11 @@
+packages:
+  - filesystem
+  - linux-firmware-raspberrypi
+  - raspberrypi-sys-mods
+  - raspberrypi-userland
+  - raspberrypi2-firmware
+  - raspberrypi2-kernel4
+  - raspberrypi2-kernel4-tools
+
+exclude-packages:
+  - kernel-debug
