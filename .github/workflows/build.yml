@@ -23,7 +23,7 @@ env:
   LATEST_MAJOR: 9
   IMAGE_NAME: almalinux-bootc-rpi
   VERSIONS_LIST: '"9", "10-kitten", "10"'
-  VARIANT_LIST: '"general", "rpi"'
+  VARIANT_LIST: '"rpi"'
 #  CHAT_CHANNEL: sigcloud
 
 jobs:
@@ -78,8 +78,6 @@ jobs:
         VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
         ARCH: [arm64]
         VARIANT: ${{ fromJSON(needs.set-versions-matrix.outputs.variants) }}
-        exclude:
-          - VARIANT: generic
 
     env:
       PLATFORM: linux/${{ matrix.ARCH }}
