@@ -98,179 +98,179 @@ jobs:
         REGISTRY_USER:  ${{ secrets.REGISTRY_USER }}
         REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 
-# push-manifest:
-#   if: ${{ always() && contains(join(needs.*.result, ','), 'success') && github.event_name != 'pull_request' && needs.set-versions-matrix.outputs.variants == 'generic' }}
-#   name: Push manifest
-#   needs: [set-versions-matrix, build]
-#   runs-on: ubuntu-24.04
-#   strategy:
-#     fail-fast: false
-#     matrix:
-#       VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
-#   env:
-#     DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
-#
-#   steps:
-#     - name: Fetch Build Outputs
-#       uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-#       with:
-#         pattern: ${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_*
-#         merge-multiple: true
-#         path: /tmp/artifacts
-#
-#     - name: Load Outputs
-#       id: load-outputs
-#       run: |
-#         if [[ ! -d /tmp/artifacts ]]; then
-#           echo "No artifacts found, skipping manifest creation"
-#           echo "skip=1" >> "$GITHUB_ENV"
-#           exit
-#         fi
-#
-#         ls -lR /tmp/artifacts/
-#         jq -sc add /tmp/artifacts/*.json > merged.json
-#         echo "DIGESTS_JSON=$(cat merged.json)" >> $GITHUB_OUTPUT
-#         jq '.' merged.json
-#
-#     - name: Sanity check
-#       if: ${{ env.skip != 1 }}
-#       id: check
-#       env:
-#         DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
-#       run: |
-#         [[ "${{ matrix.VERSION_MAJOR }}" == "9" ]] && EXPECTED=2 || EXPECTED=3
-#
-#         # Ensure we have the correct number of digests
-#         if [[ $(echo ${DIGESTS_JSON} | jq 'length') -ne $EXPECTED ]]; then
-#           echo "Expected $EXPECTED digests, found $(echo ${DIGESTS_JSON} | jq 'length')"
-#           exit 1
-#         fi
-#
-#         # Ensure all versions match
-#         COUNT=$(echo ${DIGESTS_JSON} | jq '[.[] | .version] | unique | length')
-#         if [[ $COUNT -ne 1 ]]; then
-#           echo "Versions do not match across all platforms"
-#           echo ${DIGESTS_JSON} | jq '[.[] | .version]'
-#           exit 1
-#         fi
-#
-#         echo "id=$(echo ${DIGESTS_JSON} | jq -r '[.[] | .id] | unique | .[0]')" >> $GITHUB_OUTPUT
-#         echo "version-id=$(echo ${DIGESTS_JSON} | jq -r '[.[] | .version] | unique | .[0]')" >> $GITHUB_OUTPUT
-#         echo "long-version=$(echo ${DIGESTS_JSON} | jq -r '[.[] | .long_version] | unique | .[0]')" >> $GITHUB_OUTPUT
-#         echo "vendor=$(echo ${DIGESTS_JSON} | jq -r '[.[] | .vendor] | unique | .[0]')" >> $GITHUB_OUTPUT
-#         echo "date=$(date -u +%Y\-%m\-%d\T%H\:%M\:%S\Z)" >> $GITHUB_OUTPUT
-#
-#     - name: Login to registry (docker)
-#       if: ${{ env.skip != 1 }}
-#       uses: docker/login-action@v3
-#       with:
-#         registry: ${{ secrets.IMAGE_REGISTRY }}
-#         username: ${{ secrets.REGISTRY_USER }}
-#         password: ${{ secrets.REGISTRY_PASSWORD }}
-#
-#     - name: Image Metadata
-#       if: ${{ env.skip != 1 }}
-#       uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5
-#       id: metadata
-#       with:
-#         tags: |
-#           type=raw,value=latest,enable=${{ matrix.VERSION_MAJOR == env.LATEST_MAJOR }}
-#           type=raw,value=${{ matrix.VERSION_MAJOR }}
-#           type=raw,value=${{ steps.check.outputs.version-id }},enable=${{ matrix.VERSION_MAJOR != '10-kitten' }}
-#           type=raw,value=${{ steps.check.outputs.version-id }}-${{ env.DATE_STAMP }}
-#           type=raw,value=${{ steps.check.outputs.long-version }}
-#         labels: |
-#           redhat.id=${{ steps.check.outputs.id }}
-#           redhat.version-id=${{ steps.check.outputs.version-id }}
-#           version=${{ steps.check.outputs.version-id }}
-#           release=${{ steps.check.outputs.version-id }}
-#           org.opencontainers.image.created=${{ steps.check.outputs.date }}
-#           org.opencontainers.image.source=${{ github.repositoryUrl }}
-#           org.opencontainers.image.title=${{ env.IMAGE_NAME }}
-#           org.opencontainers.image.url=${{ github.event.repository.html_url }}
-#           org.opencontainers.image.version=${{ steps.check.outputs.long-version }}
-#           org.opencontainers.image.vendor=AlmaLinux OS Foundation
-#           org.opencontainers.image.description=AlmaLinux Bootable Container Image
-#
-#
-#     - name: Get a newer podman (from debian testing)
-#       if: ${{ env.skip != 1 }}
-#       run: |
-#         set -eux
-#         echo 'deb [trusted=yes] https://ftp.debian.org/debian/ testing main' | sudo tee /etc/apt/sources.list.d/testing.list
-#         sudo apt update
-#         sudo apt install -y crun/testing podman/testing
-#
-#     - name: Create Manifest
-#       if: ${{ env.skip != 1 }}
-#       id: create-manifest
-#       run: |
-#         IMAGE_DEST=${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
-#         podman manifest create ${IMAGE_DEST}
-#         echo "MANIFEST=${IMAGE_DEST}" >> $GITHUB_OUTPUT
-#
-#     - name: Populate Manifest
-#       if: ${{ env.skip != 1 }}
-#       env:
-#         MANIFEST: ${{ steps.create-manifest.outputs.MANIFEST }}
-#         DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
-#         LABELS: ${{ steps.metadata.outputs.labels }}
-#       run: |
-#         IMAGE_DEST=${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
-#
-#         for platform in $(echo $DIGESTS_JSON | jq -r '. | to_entries | .[].key'); do
-#           digest=$(echo $DIGESTS_JSON | jq -r ".[\"$platform\"].digest")
-#           echo "Adding ${IMAGE_DEST}@$digest for $platform"
-#           if [[ "$platform" = */v* ]]; then
-#             podman manifest add $MANIFEST ${IMAGE_DEST}@$digest --arch ${platform%/*} --variant ${platform#*/}
-#           else
-#             podman manifest add $MANIFEST ${IMAGE_DEST}@$digest --arch $platform
-#           fi
-#         done
-#
-#         # Apply the labels to the manifest (separated by newlines)
-#         while IFS= read -r label; do
-#           echo "Applying label $label to manifest"
-#           podman manifest annotate --index --annotation "$label" $MANIFEST
-#         done <<< "$LABELS"
-#
-#     - name: Push Manifest
-#       if: ${{ env.skip != 1 }}
-#       id: push_manifest
-#       env:
-#         MANIFEST: ${{ steps.create-manifest.outputs.MANIFEST }}
-#         TAGS: ${{ steps.metadata.outputs.tags }}
-#       run: |
-#         IMAGE_DEST=${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
-#         while IFS= read -r tag; do
-#           for i in {1..5}; do
-#             podman manifest push --all=false --digestfile=/tmp/digestfile $MANIFEST ${IMAGE_DEST}:$tag && break || sleep $((10*i))
-#           done
-#           [ -f /tmp/digestfile ] || exit 1
-#         done <<< "$TAGS"
-#
-#         DIGEST=$(cat /tmp/digestfile)
-#         echo "digest=$DIGEST" >> $GITHUB_OUTPUT
-#         echo "image=${IMAGE_DEST}" >> $GITHUB_OUTPUT
-#
-#         echo "Pushed manifest to ${IMAGE_DEST} with digest $DIGEST"
-#         podman manifest inspect ${IMAGE_DEST}
-#
-#     - name: Format output for notification
-#       if: ${{ env.skip != 1 }}
-#       id: format
-#       env:
-#         DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
-#         TAGS: ${{ steps.metadata.outputs.tags }}
-#       run: |
-#         echo "arches=$(echo "$DIGESTS_JSON" | jq -r '[keys[] | "linux/" + .] | sort | join(", ")')" >> $GITHUB_OUTPUT
-#         # Add two spaces before each tag (starting from the second line) so that it is formatted correctly in the notification
-#         {
-#           echo 'tags<<EOF'
-#           printf "$TAGS" | awk 'NR==1{print; next} {print "  " $0}'
-#           echo EOF
-#         } >> $GITHUB_OUTPUT
-#
+  push-manifest:
+    if: ${{ always() && contains(join(needs.*.result, ','), 'success') && github.event_name != 'pull_request' }}
+    name: Push manifest
+    needs: [set-versions-matrix, build]
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
+    env:
+      DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
+
+    steps:
+      - name: Fetch Build Outputs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: ${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_*
+          merge-multiple: true
+          path: /tmp/artifacts
+
+      - name: Load Outputs
+        id: load-outputs
+        run: |
+          if [[ ! -d /tmp/artifacts ]]; then
+            echo "No artifacts found, skipping manifest creation"
+            echo "skip=1" >> "$GITHUB_ENV"
+            exit
+          fi
+
+          ls -lR /tmp/artifacts/
+          jq -sc add /tmp/artifacts/*.json > merged.json
+          echo "DIGESTS_JSON=$(cat merged.json)" >> $GITHUB_OUTPUT
+          jq '.' merged.json
+
+      - name: Sanity check
+        if: ${{ env.skip != 1 }}
+        id: check
+        env:
+          DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
+        run: |
+          EXPECTED=1
+          #[[ "${{ matrix.VERSION_MAJOR }}" == "9" ]] && EXPECTED=2 || EXPECTED=3
+
+          # Ensure we have the correct number of digests
+          if [[ $(echo ${DIGESTS_JSON} | jq 'length') -ne $EXPECTED ]]; then
+            echo "Expected $EXPECTED digests, found $(echo ${DIGESTS_JSON} | jq 'length')"
+            exit 1
+          fi
+
+          # Ensure all versions match
+          COUNT=$(echo ${DIGESTS_JSON} | jq '[.[] | .version] | unique | length')
+          if [[ $COUNT -ne 1 ]]; then
+            echo "Versions do not match across all platforms"
+            echo ${DIGESTS_JSON} | jq '[.[] | .version]'
+            exit 1
+          fi
+
+          echo "id=$(echo ${DIGESTS_JSON} | jq -r '[.[] | .id] | unique | .[0]')" >> $GITHUB_OUTPUT
+          echo "version-id=$(echo ${DIGESTS_JSON} | jq -r '[.[] | .version] | unique | .[0]')" >> $GITHUB_OUTPUT
+          echo "long-version=$(echo ${DIGESTS_JSON} | jq -r '[.[] | .long_version] | unique | .[0]')" >> $GITHUB_OUTPUT
+          echo "vendor=$(echo ${DIGESTS_JSON} | jq -r '[.[] | .vendor] | unique | .[0]')" >> $GITHUB_OUTPUT
+          echo "date=$(date -u +%Y\-%m\-%d\T%H\:%M\:%S\Z)" >> $GITHUB_OUTPUT
+
+      - name: Login to registry (docker)
+        if: ${{ env.skip != 1 }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.IMAGE_REGISTRY }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Image Metadata
+        if: ${{ env.skip != 1 }}
+        uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5
+        id: metadata
+        with:
+          tags: |
+            type=raw,value=latest,enable=${{ matrix.VERSION_MAJOR == env.LATEST_MAJOR }}
+            type=raw,value=${{ matrix.VERSION_MAJOR }}
+            type=raw,value=${{ steps.check.outputs.version-id }},enable=${{ matrix.VERSION_MAJOR != '10-kitten' }}
+            type=raw,value=${{ steps.check.outputs.version-id }}-${{ env.DATE_STAMP }}
+            type=raw,value=${{ steps.check.outputs.long-version }}
+          labels: |
+            redhat.id=${{ steps.check.outputs.id }}
+            redhat.version-id=${{ steps.check.outputs.version-id }}
+            version=${{ steps.check.outputs.version-id }}
+            release=${{ steps.check.outputs.version-id }}
+            org.opencontainers.image.created=${{ steps.check.outputs.date }}
+            org.opencontainers.image.source=${{ github.repositoryUrl }}
+            org.opencontainers.image.title=${{ env.IMAGE_NAME }}
+            org.opencontainers.image.url=${{ github.event.repository.html_url }}
+            org.opencontainers.image.version=${{ steps.check.outputs.long-version }}
+            org.opencontainers.image.vendor=AlmaLinux OS Foundation
+            org.opencontainers.image.description=AlmaLinux Bootable Container Image
+
+      - name: Get a newer podman (from debian testing)
+        if: ${{ env.skip != 1 }}
+        run: |
+          set -eux
+          echo 'deb [trusted=yes] https://ftp.debian.org/debian/ testing main' | sudo tee /etc/apt/sources.list.d/testing.list
+          sudo apt update
+          sudo apt install -y crun/testing podman/testing
+
+      - name: Create Manifest
+        if: ${{ env.skip != 1 }}
+        id: create-manifest
+        run: |
+          IMAGE_DEST=${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+          podman manifest create ${IMAGE_DEST}
+          echo "MANIFEST=${IMAGE_DEST}" >> $GITHUB_OUTPUT
+
+      - name: Populate Manifest
+        if: ${{ env.skip != 1 }}
+        env:
+          MANIFEST: ${{ steps.create-manifest.outputs.MANIFEST }}
+          DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
+          LABELS: ${{ steps.metadata.outputs.labels }}
+        run: |
+          IMAGE_DEST=${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+
+          for platform in $(echo $DIGESTS_JSON | jq -r '. | to_entries | .[].key'); do
+            digest=$(echo $DIGESTS_JSON | jq -r ".[\"$platform\"].digest")
+            echo "Adding ${IMAGE_DEST}@$digest for $platform"
+            if [[ "$platform" = */v* ]]; then
+              podman manifest add $MANIFEST ${IMAGE_DEST}@$digest --arch ${platform%/*} --variant ${platform#*/}
+            else
+              podman manifest add $MANIFEST ${IMAGE_DEST}@$digest --arch $platform
+            fi
+          done
+
+          # Apply the labels to the manifest (separated by newlines)
+          while IFS= read -r label; do
+            echo "Applying label $label to manifest"
+            podman manifest annotate --index --annotation "$label" $MANIFEST
+          done <<< "$LABELS"
+
+      - name: Push Manifest
+        if: ${{ env.skip != 1 }}
+        id: push_manifest
+        env:
+          MANIFEST: ${{ steps.create-manifest.outputs.MANIFEST }}
+          TAGS: ${{ steps.metadata.outputs.tags }}
+        run: |
+          IMAGE_DEST=${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+          while IFS= read -r tag; do
+            for i in {1..5}; do
+              podman manifest push --all=false --digestfile=/tmp/digestfile $MANIFEST ${IMAGE_DEST}:$tag && break || sleep $((10*i))
+            done
+            [ -f /tmp/digestfile ] || exit 1
+          done <<< "$TAGS"
+
+          DIGEST=$(cat /tmp/digestfile)
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+          echo "image=${IMAGE_DEST}" >> $GITHUB_OUTPUT
+
+          echo "Pushed manifest to ${IMAGE_DEST} with digest $DIGEST"
+          podman manifest inspect ${IMAGE_DEST}
+
+      - name: Format output for notification
+        if: ${{ env.skip != 1 }}
+        id: format
+        env:
+          DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
+          TAGS: ${{ steps.metadata.outputs.tags }}
+        run: |
+          echo "arches=$(echo "$DIGESTS_JSON" | jq -r '[keys[] | "linux/" + .] | sort | join(", ")')" >> $GITHUB_OUTPUT
+          # Add two spaces before each tag (starting from the second line) so that it is formatted correctly in the notification
+          {
+            echo 'tags<<EOF'
+            printf "$TAGS" | awk 'NR==1{print; next} {print "  " $0}'
+            echo EOF
+          } >> $GITHUB_OUTPUT
+
 #     - name: Notify AlmaLinux Chat
 #       if: ${{ env.skip != 1 }}
 #       uses: mattermost/action-mattermost-notify@master
