@@ -30,6 +30,7 @@ env:
   AWS_REGION: us-east-1
   AWS_ROLE_ARN: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/SIG_Cloud_GHA
   KMS_KEY_ID: SIG_Cloud_Container_Signing_GH_CI
+  CHAT_CHANNEL: sigcloud
 
 jobs:
   set-versions-matrix:
@@ -262,3 +263,38 @@ jobs:
           KMS_KEY_ID: ${{ env.KMS_KEY_ID }}
           AWS_ROLE_ARN: ${{ env.AWS_ROLE_ARN }}
           AWS_REGION: ${{ env.AWS_REGION }}
+
+      - name: Format output for notification
+        if: ${{ env.skip != 1 }}
+        id: format
+        env:
+          DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
+          TAGS: ${{ steps.metadata.outputs.tags }}
+        run: |
+          echo "arches=$(echo "$DIGESTS_JSON" | jq -r '[keys[] | "linux/" + .] | sort | join(", ")')" >> $GITHUB_OUTPUT
+          # Add two spaces before each tag (starting from the second line) so that it is formatted correctly in the notification
+          {
+            echo 'tags<<EOF'
+            printf "$TAGS" | awk 'NR==1{print; next} {print "  " $0}'
+            echo EOF
+          } >> $GITHUB_OUTPUT
+
+      - name: Notify AlmaLinux Chat
+        if: ${{ env.skip != 1 }}
+        uses: mattermost/action-mattermost-notify@master
+        with:
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MM_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ env.CHAT_CHANNEL }}
+          MATTERMOST_USERNAME: 'github'
+          TEXT: |-
+            **AlmaLinux OS ${{ steps.check.outputs.version-id }}** Bootc Image, build `${{ steps.check.outputs.long-version }}`, built by [GitHub Actions](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            :almalinux: **${{ steps.push_manifest.outputs.image }}**
+            - Platforms:
+              ```
+              ${{ steps.format.outputs.arches }}
+              ```
+            - Tags:
+              ```
+              ${{ steps.format.outputs.tags }}
+              ```
