@@ -29,6 +29,7 @@ runs:
         role-session-name: almalinux-container-signing-${{ github.run_id }}
         aws-region: ${{ inputs.AWS_REGION }}
         role-duration-seconds: 900  # 15 minutes, the minimum
+        mask-aws-account-id: true
 
     - name: Sign Image with KMS
       if: ${{ env.AWS_DEFAULT_REGION != '' }}
