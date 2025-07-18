@@ -28,7 +28,7 @@ env:
   IMAGE_NAME: almalinux-bootc
   VERSIONS_LIST: '"9", "10-kitten", "10"'
   AWS_REGION: us-east-1
-  AWS_ROLE_ARN: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/SIG_Cloud_GHA
+  AWS_ROLE_ARN: bootcimages
   KMS_KEY_ALIAS: cloudsig
   CHAT_CHANNEL: sigcloud
 
