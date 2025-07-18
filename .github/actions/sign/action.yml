@@ -5,7 +5,7 @@ inputs:
   image-ref:
     description: The full reference to the image to sign, including the hash
     required: true
-  KMS_KEY_ID:
+  KMS_KEY_ALIAS:
     description: The KMS key ID to use for signing
     required: false
   AWS_ROLE_ARN:
@@ -33,4 +33,4 @@ runs:
     - name: Sign Image with KMS
       if: ${{ env.AWS_DEFAULT_REGION != '' }}
       shell: bash
-      run: cosign sign --yes --key awskms:///alias/${{ inputs.KMS_KEY_ID }} ${{ inputs.image-ref }}
+      run: cosign sign --yes --key awskms:///alias/${{ inputs.KMS_KEY_ALIAS }} ${{ inputs.image-ref }}

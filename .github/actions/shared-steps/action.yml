@@ -11,7 +11,7 @@ inputs:
     required: true
   REGISTRY_PASSWORD:
     required: true
-  KMS_KEY_ID:
+  KMS_KEY_ALIAS:
     description: The KMS key ID to use for signing
     required: false
   AWS_ROLE_ARN:
@@ -154,7 +154,7 @@ runs:
       uses: ./.github/actions/sign
       with:
         image-ref: ${{ steps.push.outputs.image-ref }}@${{ steps.push.outputs.digest }}
-        KMS_KEY_ID: ${{ inputs.KMS_KEY_ID }}
+        KMS_KEY_ALIAS: ${{ inputs.KMS_KEY_ALIAS }}
         AWS_ROLE_ARN: ${{ inputs.AWS_ROLE_ARN }}
         AWS_REGION: ${{ inputs.AWS_REGION }}
 

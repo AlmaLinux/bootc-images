@@ -29,7 +29,7 @@ env:
   VERSIONS_LIST: '"9", "10-kitten", "10"'
   AWS_REGION: us-east-1
   AWS_ROLE_ARN: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/SIG_Cloud_GHA
-  KMS_KEY_ID: cloudsig
+  KMS_KEY_ALIAS: cloudsig
   CHAT_CHANNEL: sigcloud
 
 jobs:
@@ -94,7 +94,7 @@ jobs:
         IMAGE_REGISTRY: ${{ secrets.IMAGE_REGISTRY }}
         REGISTRY_USER:  ${{ secrets.REGISTRY_USER }}
         REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
-        KMS_KEY_ID: ${{ env.KMS_KEY_ID }}
+        KMS_KEY_ALIAS: ${{ env.KMS_KEY_ALIAS }}
         AWS_ROLE_ARN: ${{ env.AWS_ROLE_ARN }}
         AWS_REGION: ${{ env.AWS_REGION }}
 
@@ -260,7 +260,7 @@ jobs:
         uses: ./.github/actions/sign
         with:
           image-ref: ${{ steps.push_manifest.outputs.image }}@${{ steps.push_manifest.outputs.digest }}
-          KMS_KEY_ID: ${{ env.KMS_KEY_ID }}
+          KMS_KEY_ALIAS: ${{ env.KMS_KEY_ALIAS }}
           AWS_ROLE_ARN: ${{ env.AWS_ROLE_ARN }}
           AWS_REGION: ${{ env.AWS_REGION }}
 
