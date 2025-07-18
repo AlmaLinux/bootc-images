@@ -29,7 +29,7 @@ env:
   VERSIONS_LIST: '"9", "10-kitten", "10"'
   AWS_REGION: us-east-1
   AWS_ROLE_ARN: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/SIG_Cloud_GHA
-  KMS_KEY_ID: SIG_Cloud_Container_Signing_GH_CI
+  KMS_KEY_ID: cloudsig
   CHAT_CHANNEL: sigcloud
 
 jobs:
