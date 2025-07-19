@@ -111,6 +111,9 @@ jobs:
       DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Fetch Build Outputs
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
