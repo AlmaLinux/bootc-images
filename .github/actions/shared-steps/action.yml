@@ -35,13 +35,12 @@ runs:
         ARCH=${{ matrix.ARCH }}
         echo "CLEAN_ARCH=${ARCH//\//_}" >> "$GITHUB_ENV"
 
-    - name: Log in to registry
-      shell: bash
-      run: |
-        sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
-
-        # This is needed by cosign
-        sudo docker login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
+    - name: Login in to registry
+      uses: redhat-actions/podman-login@v1 # Also creates $HOME/.docker/config.json, which is used by Cosign for authentication.
+      with:
+        registry: ${{ inputs.IMAGE_REGISTRY }}
+        username: ${{ inputs.REGISTRY_USER }}
+        password: ${{ inputs.REGISTRY_PASSWORD }}
 
     - name: Check update
       shell: bash
