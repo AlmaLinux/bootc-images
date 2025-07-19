@@ -1,5 +1,7 @@
 name: Build amd64 and arm64
 on:
+  pull_request:
+    types: [synchronize, opened, reopened]
   workflow_dispatch:
     inputs:
       RELEASE:
@@ -45,6 +47,9 @@ jobs:
         run: |
           # Format json for versions matrix
           case ${{ github.event_name }} in
+            pull_request)
+              echo "matrix=$(jq -c <<< '[${{ env.VERSIONS_LIST }}]')" >> $GITHUB_OUTPUT
+              ;;
             workflow_dispatch)
               if [[ "${{ inputs.RELEASE }}" == "ALL" ]]; then
                 echo "matrix=$(jq -c <<< '[${{ env.VERSIONS_LIST }}]')" >> $GITHUB_OUTPUT
@@ -99,7 +104,7 @@ jobs:
         AWS_REGION: ${{ env.AWS_REGION }}
 
   push-manifest:
-    if: ${{ always() && contains(join(needs.*.result, ','), 'success') }}
+    if: ${{ always() && contains(join(needs.*.result, ','), 'success') && github.event_name != 'pull_request'  }}
     name: Push manifest
     needs: [set-versions-matrix, build]
     runs-on: ubuntu-24.04
