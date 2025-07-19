@@ -12,7 +12,7 @@ inputs:
   REGISTRY_PASSWORD:
     required: true
   KMS_KEY_ALIAS:
-    description: The KMS key ID to use for signing
+    description: The AWS KMS alias to use for signing
     required: false
   AWS_ROLE_ARN:
     description: The AWS role ARN to assume for signing
