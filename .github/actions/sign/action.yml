@@ -1,0 +1,37 @@
+---
+name: Sign image
+
+inputs:
+  image-ref:
+    description: The full reference to the image to sign, including the hash
+    required: true
+  KMS_KEY_ALIAS:
+    description: The AWS KMS alias to use for signing
+    required: false
+  AWS_ROLE_ARN:
+    description: The AWS role ARN to assume for signing
+    required: false
+  AWS_REGION:
+    description: The AWS region to use for signing
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Cosign
+      uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+
+    - name: Configure AWS credentials
+      id: configure-aws
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.AWS_ROLE_ARN }}
+        role-session-name: almalinux-container-signing-${{ github.run_id }}
+        aws-region: ${{ inputs.AWS_REGION }}
+        role-duration-seconds: 900  # 15 minutes, the minimum
+        mask-aws-account-id: true
+
+    - name: Sign Image with KMS
+      if: ${{ env.AWS_DEFAULT_REGION != '' }}
+      shell: bash
+      run: cosign sign --yes --key awskms:///alias/${{ inputs.KMS_KEY_ALIAS }} ${{ inputs.image-ref }}

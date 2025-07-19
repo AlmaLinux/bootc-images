@@ -11,6 +11,15 @@ inputs:
     required: true
   REGISTRY_PASSWORD:
     required: true
+  KMS_KEY_ALIAS:
+    description: The AWS KMS alias to use for signing
+    required: false
+  AWS_ROLE_ARN:
+    description: The AWS role ARN to assume for signing
+    required: false
+  AWS_REGION:
+    description: The AWS region to use for signing
+    required: false
 runs:
   using: "composite"
   steps:
@@ -28,7 +37,11 @@ runs:
 
     - name: Log in to registry
       shell: bash
-      run: sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
+      run: |
+        sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
+
+        # This is needed by cosign
+        sudo docker login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
 
     - name: Check update
       shell: bash
@@ -133,7 +146,17 @@ runs:
         done
         [ -f /tmp/digestfile ] || exit 1
         echo "digest=$(cat /tmp/digestfile)" >> $GITHUB_OUTPUT
+        echo "image-ref=${IMAGE_DEST}:${{ env.VERSION }}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}" >> $GITHUB_OUTPUT
         sudo podman inspect ${{ env.IMAGE_ID }}
+
+    - name: Sign Image
+      if: ${{ github.event_name != 'pull_request' && (env.res != 0 || github.event_name == 'workflow_dispatch') }}
+      uses: ./.github/actions/sign
+      with:
+        image-ref: ${{ steps.push.outputs.image-ref }}@${{ steps.push.outputs.digest }}
+        KMS_KEY_ALIAS: ${{ inputs.KMS_KEY_ALIAS }}
+        AWS_ROLE_ARN: ${{ inputs.AWS_ROLE_ARN }}
+        AWS_REGION: ${{ inputs.AWS_REGION }}
 
     - name: Create Job Outputs
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
