@@ -30,7 +30,7 @@ env:
   AWS_REGION: us-east-1
   AWS_ROLE_ARN: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/bootcimages
   KMS_KEY_ALIAS: cloudsig
-  CHAT_CHANNEL: sigcloud
+  CHAT_CHANNEL: ${{ env.MATTERMOST_CHANNEL }}
 
 jobs:
   set-versions-matrix:
