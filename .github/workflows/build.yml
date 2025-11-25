@@ -195,13 +195,13 @@ jobs:
             org.opencontainers.image.vendor=AlmaLinux OS Foundation
             org.opencontainers.image.description=AlmaLinux Bootable Container Image
 
-      - name: Get a newer podman (from debian testing)
+      - name: Get a newer podman (from debian trixie)
         if: ${{ env.skip != 1 }}
         run: |
           set -eux
-          echo 'deb [trusted=yes] https://ftp.debian.org/debian/ testing main' | sudo tee /etc/apt/sources.list.d/testing.list
+          echo 'deb [trusted=yes] https://ftp.debian.org/debian/ trixie main' | sudo tee /etc/apt/sources.list.d/trixie.list
           sudo apt update
-          sudo apt install -y crun/testing podman/testing
+          sudo apt install -y crun/trixie podman/trixie
 
       - name: Create Manifest
         if: ${{ env.skip != 1 }}
