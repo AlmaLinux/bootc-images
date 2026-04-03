@@ -1,15 +1,21 @@
 name: "Build and Push"
+description: Build and push the image to the container registry
 
 inputs:
   VERSION_MAJOR:
+    description: The major version of the image to build (e.g. 9, 10)
     required: true
   DATE_STAMP:
+    description: The date stamp used for tagging the image (e.g. 20260403)
     required: true
   IMAGE_REGISTRY:
+    description: The container registry to push the image to (e.g. quay.io/almalinuxorg)
     required: true
   REGISTRY_USER:
+    description: The username for authenticating with the container registry
     required: true
   REGISTRY_PASSWORD:
+    description: The password for authenticating with the container registry
     required: true
   KMS_KEY_ALIAS:
     description: The AWS KMS alias to use for signing
@@ -20,6 +26,7 @@ inputs:
   AWS_REGION:
     description: The AWS region to use for signing
     required: false
+
 runs:
   using: "composite"
   steps:
