@@ -35,6 +35,8 @@ env:
 jobs:
   set-versions-matrix:
     name: Set versions matrix
+    # Run the scheduled builds only in the upstream repository, not in forks
+    if: ${{ github.event_name != 'schedule' || github.repository == 'AlmaLinux/bootc-images' }}
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
