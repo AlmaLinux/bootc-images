@@ -1,4 +1,9 @@
 name: Build amd64 and arm64
+run-name: >-
+  ${{ (github.event_name == 'schedule' || inputs.RELEASE == 'ALL')
+      && 'Build all AlmaLinux versions'
+      || format('Build AlmaLinux {0} amd64 and arm64',
+                inputs.RELEASE == '10-kitten' && 'Kitten 10' || inputs.RELEASE) }}
 on:
   workflow_dispatch:
     inputs:
@@ -35,6 +40,8 @@ env:
 jobs:
   set-versions-matrix:
     name: Set versions matrix
+    # Run the scheduled builds only in the upstream repository, not in forks
+    if: ${{ github.event_name != 'schedule' || github.repository == 'AlmaLinux/bootc-images' }}
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -82,7 +89,7 @@ jobs:
       DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         submodules: true
 
@@ -112,7 +119,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Fetch Build Outputs
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
