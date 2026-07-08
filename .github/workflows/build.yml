@@ -1,4 +1,9 @@
 name: Build amd64 and arm64
+run-name: >-
+  ${{ (github.event_name == 'schedule' || inputs.RELEASE == 'ALL')
+      && 'Build all AlmaLinux versions'
+      || format('Build AlmaLinux {0} amd64 and arm64',
+                inputs.RELEASE == '10-kitten' && 'Kitten 10' || inputs.RELEASE) }}
 on:
   workflow_dispatch:
     inputs:
