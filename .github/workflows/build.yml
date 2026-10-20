@@ -136,6 +136,11 @@ jobs:
           path: /tmp/digests
           merge-multiple: true
 
+      - name: Debug artifact layout
+        run: |
+          echo "==> /tmp/digests contents:"
+          ls -laR /tmp/digests/ || true
+
       - name: Login to ghcr.io
         uses: docker/login-action@d3b9cdfa580156c018ca5e745c1bf653d8ea46b5
         with:
