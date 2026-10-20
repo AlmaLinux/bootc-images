@@ -1,310 +1,191 @@
-name: Build amd64 and arm64
-run-name: >-
-  ${{ (github.event_name == 'schedule' || inputs.RELEASE == 'ALL')
-      && 'Build all AlmaLinux versions'
-      || format('Build AlmaLinux {0} amd64 and arm64',
-                inputs.RELEASE == '10-kitten' && 'Kitten 10' || inputs.RELEASE) }}
+---
+name: build-kitten
+
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      RELEASE:
-        description: 'AlmaLinux release'
-        required: true
-        default: '9'
-        type: choice
-        options:
-          - '10-kitten'
-          - '10'
-          - '9'
-          - 'ALL'
-
   schedule:
-    # run every day at 03:00 UTC
-    - cron:  '00 03 * * *'
+    - cron: "0 3 * * 1"
 
-# REQUIRED: Set up permissions for OIDC token and KMS access
-permissions:
-  id-token: write
-  contents: read
-  packages: write
+permissions: {}
 
 env:
-  LATEST_MAJOR: 9
   IMAGE_NAME: almalinux-bootc
-  VERSIONS_LIST: '"9", "10-kitten", "10"'
-  AWS_REGION: us-east-1
-  AWS_ROLE_ARN: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/bootcimages
-  KMS_KEY_ALIAS: cloudsig
-  CHAT_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+  IMAGE_REGISTRY: ghcr.io
+  IMAGE_OWNER: daedalusys
 
 jobs:
   set-versions-matrix:
     name: Set versions matrix
-    # Run the scheduled builds only in the upstream repository, not in forks
-    if: ${{ github.event_name != 'schedule' || github.repository == 'AlmaLinux/bootc-images' }}
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
-      date_stamp: ${{ steps.date-stamp.outputs.date_stamp }}
     steps:
       - name: Set matrix
         id: set-matrix
         run: |
-          # Format json for versions matrix
-          case ${{ github.event_name }} in
-            workflow_dispatch)
-              if [[ "${{ inputs.RELEASE }}" == "ALL" ]]; then
-                echo "matrix=$(jq -c <<< '[${{ env.VERSIONS_LIST }}]')" >> $GITHUB_OUTPUT
-              else
-                echo "matrix=$(jq -c <<< '["${{ inputs.RELEASE }}"]')" >> $GITHUB_OUTPUT
-              fi
-              ;;
-            schedule)
-              echo "matrix=$(jq -c <<< '[${{ env.VERSIONS_LIST }}]')" >> $GITHUB_OUTPUT
-              ;;
-          esac
-
-      - name: Date stamp
-        id: date-stamp
-        run: |
-          # date stamp
-          date_stamp=$(date -u '+%Y%m%d')
-          [ "x${date_stamp}" != "x" ] && echo "date_stamp=${date_stamp}" >> "$GITHUB_OUTPUT"
+          echo 'matrix=["10-kitten"]' >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build image
-    runs-on: ${{ matrix.ARCH == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    name: Build ${{ matrix.VERSION_MAJOR }} ${{ matrix.ARCH }}
     needs: [set-versions-matrix]
+    runs-on: ${{ matrix.ARCH == 'arm64' && 'ubuntu-24.04-arm'
+        || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
       matrix:
-        VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
-        ARCH: [amd64, arm64, amd64/v2]
-        exclude:
-          - VERSION_MAJOR: 9
-            ARCH: amd64/v2
-
+        VERSION_MAJOR: ${{ fromJSON(
+            needs.set-versions-matrix.outputs.matrix) }}
+        ARCH: [amd64, arm64]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     env:
       PLATFORM: linux/${{ matrix.ARCH }}
-      DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
-
+      VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
     steps:
-    - uses: actions/checkout@v7
-      with:
-        submodules: true
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936dce9a # v4.1.1
+        with:
+          submodules: true
 
-    - uses: ./.github/actions/shared-steps
-      name: Build and Push
-      with:
-        VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
-        DATE_STAMP: ${{ env.DATE_STAMP }}
-        IMAGE_REGISTRY: ${{ secrets.IMAGE_REGISTRY }}
-        REGISTRY_USER:  ${{ secrets.REGISTRY_USER }}
-        REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
-        KMS_KEY_ALIAS: ${{ env.KMS_KEY_ALIAS }}
-        AWS_ROLE_ARN: ${{ env.AWS_ROLE_ARN }}
-        AWS_REGION: ${{ env.AWS_REGION }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@ce3607c224f5ac1d7858e84d5b4e1d6172c1b0e6
 
-  push-manifest:
-    if: ${{ always() && contains(join(needs.*.result, ','), 'success') }}
-    name: Push manifest
+      - name: Build image
+        run: |
+          set -euxo pipefail
+          sudo podman build \
+            --platform="${PLATFORM}" \
+            --security-opt=label=disable \
+            --cap-add=all \
+            --device /dev/fuse \
+            --manifest localhost/${IMAGE_NAME}:${VERSION_MAJOR} \
+            -f ${VERSION_MAJOR}/Containerfile \
+            .
+
+      - name: Rechunk
+        run: |
+          set -euxo pipefail
+          sudo podman run --rm --privileged \
+            --security-opt=label=disable \
+            -v /var/lib/containers:/var/lib/containers:z \
+            quay.io/centos-bootc/centos-bootc:stream10 \
+            /usr/libexec/bootc-base-imagectl rechunk \
+            localhost/${IMAGE_NAME}:${VERSION_MAJOR} \
+            localhost/${IMAGE_NAME}:${VERSION_MAJOR}-rechunked
+          sudo podman tag \
+            localhost/${IMAGE_NAME}:${VERSION_MAJOR}-rechunked \
+            localhost/${IMAGE_NAME}:${VERSION_MAJOR}
+          sudo podman rmi \
+            localhost/${IMAGE_NAME}:${VERSION_MAJOR}-rechunked
+
+      - name: Login to ghcr.io
+        if: github.event_name != 'schedule'
+        uses: docker/login-action@5cd7b56da8b1ed3f5dbab76af9c2a5ce831a64
+        with:
+          registry: ${{ env.IMAGE_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push per-arch image
+        if: github.event_name != 'schedule'
+        env:
+          ARCH: ${{ matrix.ARCH }}
+        run: |
+          set -euxo pipefail
+          IMAGE_DEST="${IMAGE_REGISTRY}/${IMAGE_OWNER}/${IMAGE_NAME}"
+          sudo podman push \
+            --digestfile=/tmp/digest-${VERSION_MAJOR}-${ARCH} \
+            "localhost/${IMAGE_NAME}:${VERSION_MAJOR}" \
+            "docker://${IMAGE_DEST}:${VERSION_MAJOR}-${ARCH}"
+
+  sign-and-manifest:
+    name: Sign + manifest
     needs: [set-versions-matrix, build]
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        VERSION_MAJOR: ${{ fromJSON(needs.set-versions-matrix.outputs.matrix) }}
-    env:
-      DATE_STAMP: ${{ needs.set-versions-matrix.outputs.date_stamp }}
-
+        VERSION_MAJOR: ${{ fromJSON(
+            needs.set-versions-matrix.outputs.matrix) }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      - name: Install cosign
+        uses: sigstore/cosign-installer@345a62d386f5f2c4b266de18a362c1b6e5f76b3e
 
-      - name: Fetch Build Outputs
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          pattern: ${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_*
-          merge-multiple: true
-          path: /tmp/artifacts
-
-      - name: Load Outputs
-        id: load-outputs
+      - name: Install podman
         run: |
-          if [[ ! -d /tmp/artifacts ]]; then
-            echo "No artifacts found, skipping manifest creation"
-            echo "skip=1" >> "$GITHUB_ENV"
-            exit
-          fi
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y podman
 
-          ls -lR /tmp/artifacts/
-          jq -sc add /tmp/artifacts/*.json > merged.json
-          echo "DIGESTS_JSON=$(cat merged.json)" >> $GITHUB_OUTPUT
-          jq '.' merged.json
+      - name: Fetch digests
+        uses: actions/upload-artifact@5d5c4c030c2c3a7e9e01cd9c4ce0e7b9a16ddc69
+        with:
+          path: /tmp/digest-*
+          retention-days: 1
 
-      - name: Sanity check
-        if: ${{ env.skip != 1 }}
-        id: check
+      - name: Login to ghcr.io
+        uses: docker/login-action@5cd7b56da8b1ed3f5dbab76af9c2a5ce831a64
+        with:
+          registry: ${{ env.IMAGE_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sign per-arch with cosign
         env:
-          DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
+          VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          IMAGE_OWNER: ${{ env.IMAGE_OWNER }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
         run: |
-          [[ "${{ matrix.VERSION_MAJOR }}" == "9" ]] && EXPECTED=2 || EXPECTED=3
-
-          # Ensure we have the correct number of digests
-          if [[ $(echo ${DIGESTS_JSON} | jq 'length') -ne $EXPECTED ]]; then
-            echo "Expected $EXPECTED digests, found $(echo ${DIGESTS_JSON} | jq 'length')"
-            exit 1
-          fi
-
-          # Ensure all versions match
-          COUNT=$(echo ${DIGESTS_JSON} | jq '[.[] | .version] | unique | length')
-          if [[ $COUNT -ne 1 ]]; then
-            echo "Versions do not match across all platforms"
-            echo ${DIGESTS_JSON} | jq '[.[] | .version]'
-            exit 1
-          fi
-
-          echo "id=$(echo ${DIGESTS_JSON} | jq -r '[.[] | .id] | unique | .[0]')" >> $GITHUB_OUTPUT
-          echo "version-id=$(echo ${DIGESTS_JSON} | jq -r '[.[] | .version] | unique | .[0]')" >> $GITHUB_OUTPUT
-          echo "long-version=$(echo ${DIGESTS_JSON} | jq -r '[.[] | .long_version] | unique | .[0]')" >> $GITHUB_OUTPUT
-          echo "vendor=$(echo ${DIGESTS_JSON} | jq -r '[.[] | .vendor] | unique | .[0]')" >> $GITHUB_OUTPUT
-          echo "date=$(date -u +%Y\-%m\-%d\T%H\:%M\:%S\Z)" >> $GITHUB_OUTPUT
-
-      - name: Login to registry (docker)
-        if: ${{ env.skip != 1 }}
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.IMAGE_REGISTRY }}
-          username: ${{ secrets.REGISTRY_USER }}
-          password: ${{ secrets.REGISTRY_PASSWORD }}
-
-      - name: Image Metadata
-        if: ${{ env.skip != 1 }}
-        uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5
-        id: metadata
-        with:
-          tags: |
-            type=raw,value=latest,enable=${{ matrix.VERSION_MAJOR == env.LATEST_MAJOR }}
-            type=raw,value=${{ matrix.VERSION_MAJOR }}
-            type=raw,value=${{ steps.check.outputs.version-id }},enable=${{ matrix.VERSION_MAJOR != '10-kitten' }}
-            type=raw,value=${{ steps.check.outputs.version-id }}-${{ env.DATE_STAMP }}
-            type=raw,value=${{ steps.check.outputs.long-version }}
-          labels: |
-            redhat.id=${{ steps.check.outputs.id }}
-            redhat.version-id=${{ steps.check.outputs.version-id }}
-            version=${{ steps.check.outputs.version-id }}
-            release=${{ steps.check.outputs.version-id }}
-            org.opencontainers.image.created=${{ steps.check.outputs.date }}
-            org.opencontainers.image.source=${{ github.repositoryUrl }}
-            org.opencontainers.image.title=${{ env.IMAGE_NAME }}
-            org.opencontainers.image.url=${{ github.event.repository.html_url }}
-            org.opencontainers.image.version=${{ steps.check.outputs.long-version }}
-            org.opencontainers.image.vendor=AlmaLinux OS Foundation
-            org.opencontainers.image.description=AlmaLinux Bootable Container Image
-
-      - name: Get a newer podman (from debian trixie)
-        if: ${{ env.skip != 1 }}
-        run: |
-          set -eux
-          echo 'deb [trusted=yes] https://ftp.debian.org/debian/ trixie main' | sudo tee /etc/apt/sources.list.d/trixie.list
-          sudo apt update
-          sudo apt install -y crun/trixie podman/trixie
-
-      - name: Create Manifest
-        if: ${{ env.skip != 1 }}
-        id: create-manifest
-        run: |
-          IMAGE_DEST=${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
-          podman manifest create ${IMAGE_DEST}
-          echo "MANIFEST=${IMAGE_DEST}" >> $GITHUB_OUTPUT
-
-      - name: Populate Manifest
-        if: ${{ env.skip != 1 }}
-        env:
-          MANIFEST: ${{ steps.create-manifest.outputs.MANIFEST }}
-          DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
-          LABELS: ${{ steps.metadata.outputs.labels }}
-        run: |
-          IMAGE_DEST=${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
-
-          for platform in $(echo $DIGESTS_JSON | jq -r '. | to_entries | .[].key'); do
-            digest=$(echo $DIGESTS_JSON | jq -r ".[\"$platform\"].digest")
-            echo "Adding ${IMAGE_DEST}@$digest for $platform"
-            if [[ "$platform" = */v* ]]; then
-              podman manifest add $MANIFEST ${IMAGE_DEST}@$digest --arch ${platform%/*} --variant ${platform#*/}
-            else
-              podman manifest add $MANIFEST ${IMAGE_DEST}@$digest --arch $platform
-            fi
+          set -euxo pipefail
+          IMAGE_DEST="${IMAGE_REGISTRY}/${IMAGE_OWNER}/${IMAGE_NAME}"
+          for arch in amd64 arm64; do
+            digest=$(cat /tmp/digest-${VERSION_MAJOR}-${arch})
+            cosign sign --yes "${IMAGE_DEST}@${digest}"
           done
 
-          # Apply the labels to the manifest (separated by newlines)
-          while IFS= read -r label; do
-            echo "Applying label $label to manifest"
-            podman manifest annotate --index --annotation "$label" $MANIFEST
-          done <<< "$LABELS"
-
-      - name: Push Manifest
-        if: ${{ env.skip != 1 }}
-        id: push_manifest
+      - name: Create + push manifest list
         env:
-          MANIFEST: ${{ steps.create-manifest.outputs.MANIFEST }}
-          TAGS: ${{ steps.metadata.outputs.tags }}
+          VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          IMAGE_OWNER: ${{ env.IMAGE_OWNER }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
         run: |
-          IMAGE_DEST=${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
-          while IFS= read -r tag; do
-            for i in {1..5}; do
-              podman manifest push --all=false --digestfile=/tmp/digestfile $MANIFEST ${IMAGE_DEST}:$tag && break || sleep $((10*i))
-            done
-            [ -f /tmp/digestfile ] || exit 1
-          done <<< "$TAGS"
+          set -euxo pipefail
+          IMAGE_DEST="${IMAGE_REGISTRY}/${IMAGE_OWNER}/${IMAGE_NAME}"
+          sudo podman manifest create "${IMAGE_DEST}:${VERSION_MAJOR}"
+          for arch in amd64 arm64; do
+            digest=$(cat /tmp/digest-${VERSION_MAJOR}-${arch})
+            sudo podman manifest add \
+              "${IMAGE_DEST}:${VERSION_MAJOR}" \
+              "${IMAGE_DEST}@${digest}" \
+              --arch "$arch"
+          done
+          sudo podman manifest push \
+            --all=false \
+            --digestfile=/tmp/manifest-digest-${VERSION_MAJOR} \
+            "${IMAGE_DEST}:${VERSION_MAJOR}" \
+            "docker://${IMAGE_DEST}:${VERSION_MAJOR}"
 
-          DIGEST=$(cat /tmp/digestfile)
-          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
-          echo "image=${IMAGE_DEST}" >> $GITHUB_OUTPUT
-
-          echo "Pushed manifest to ${IMAGE_DEST} with digest $DIGEST"
-          podman manifest inspect ${IMAGE_DEST}
-
-      - name: Sign Manifest
-        if: ${{ env.skip != 1 }}
-        uses: ./.github/actions/sign
-        with:
-          image-ref: ${{ steps.push_manifest.outputs.image }}@${{ steps.push_manifest.outputs.digest }}
-          KMS_KEY_ALIAS: ${{ env.KMS_KEY_ALIAS }}
-          AWS_ROLE_ARN: ${{ env.AWS_ROLE_ARN }}
-          AWS_REGION: ${{ env.AWS_REGION }}
-
-      - name: Format output for notification
-        if: ${{ env.skip != 1 }}
-        id: format
+      - name: Sign manifest list
         env:
-          DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
-          TAGS: ${{ steps.metadata.outputs.tags }}
+          VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          IMAGE_OWNER: ${{ env.IMAGE_OWNER }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
         run: |
-          echo "arches=$(echo "$DIGESTS_JSON" | jq -r '[keys[] | "linux/" + .] | sort | join(", ")')" >> $GITHUB_OUTPUT
-          # Add two spaces before each tag (starting from the second line) so that it is formatted correctly in the notification
-          {
-            echo 'tags<<EOF'
-            printf "$TAGS" | awk 'NR==1{print; next} {print "  " $0}'
-            echo EOF
-          } >> $GITHUB_OUTPUT
-
-      - name: Notify AlmaLinux Chat
-        if: ${{ env.skip != 1 }}
-        uses: mattermost/action-mattermost-notify@master
-        with:
-          MATTERMOST_WEBHOOK_URL: ${{ secrets.MM_WEBHOOK_URL }}
-          MATTERMOST_CHANNEL: ${{ env.CHAT_CHANNEL }}
-          MATTERMOST_USERNAME: 'github'
-          TEXT: |-
-            **AlmaLinux OS ${{ steps.check.outputs.version-id }}** Bootc Image, build `${{ steps.check.outputs.long-version }}`, built by [GitHub Actions](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-
-            :almalinux: **${{ steps.push_manifest.outputs.image }}**
-            - Platforms:
-              ```
-              ${{ steps.format.outputs.arches }}
-              ```
-            - Tags:
-              ```
-              ${{ steps.format.outputs.tags }}
-              ```
+          set -euxo pipefail
+          IMAGE_DEST="${IMAGE_REGISTRY}/${IMAGE_OWNER}/${IMAGE_NAME}"
+          digest=$(cat /tmp/manifest-digest-${VERSION_MAJOR})
+          cosign sign --yes "${IMAGE_DEST}@${digest}"

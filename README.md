@@ -1,80 +1,34 @@
-# AlmaLinux Bootable Container Base Images (bootc)
+# Daedalus Bootc Base — headless variant of `almalinux-bootc`
 
-**<ins>Caution</ins>: AlmaLinux bootc images are currently *experimental*. Please use with care and report any issues.**
+**This is a fork** of [`AlmaLinux/bootc-images`](https://github.com/AlmaLinux/bootc-images), stripped to the **`10-kitten`** variant only. It exists to give the [Daedalus](https://github.com/Daedalusys/daedalus-core) fleet a smaller, headless base image than the full `quay.io/almalinuxorg/almalinux-bootc:10`.
 
-## Available Pre-built Images
+## What this fork ships
 
-Official pre-built experimental images are available on Quay.io:
+- **`10-kitten/`** directory unchanged from upstream — uses `almalinux-kitten-repos` only (no `baseos + appstream`)
+- GitHub Actions matrix: `[10-kitten] × [amd64, arm64]`
+- Publishes multi-arch manifest to **`ghcr.io/daedalusys/almalinux-bootc:10-kitten`**
+- cosign-signed (keyless, via GitHub OIDC)
 
-* **[quay.io/almalinuxorg/almalinux-bootc](https://quay.io/repository/almalinuxorg/almalinux-bootc?tab=tags)**
+## What this fork does NOT ship
 
-This project provides tooling to build experimental AlmaLinux bootable container images. These images leverage the [bootc project](https://containers.github.io/bootc/), which enables the creation of bootable OS images from container images.
+- `9/` directory — drop, we only care about AlmaLinux 10
+- `10/` directory — drop, full variant is overkill for headless Daedalus nodes
+- AWS KMS cosign signing — replaced with keyless cosign (no AWS dependency)
+- Mattermost notifications — drop, fork CI is local to this org
 
-Our images are based on the work done for [CentOS Bootc Base Images](https://gitlab.com/redhat/centos-stream/containers/bootc/-/tree/c10s?ref_type=heads) and utilize [bootc-base-imagectl](https://gitlab.com/fedora/bootc/base-images/-/blob/main/bootc-base-imagectl.md?ref_type=heads) for their construction.
+## Rebase strategy
 
-## Project Status & News
+See [`docs/REBASE.md`](docs/REBASE.md). Briefly: monthly `git fetch upstream && git rebase upstream/main`, expect conflicts in `Makefile` and `cosign.pub` only.
 
-* **[2024-09-02]** AlmaLinux announces experimental bootc support and HeliumOS: [Read the blog post](https://almalinux.org/blog/2024-09-02-bootc-almalinux-heliumos/)
-* For the latest general information about AlmaLinux, visit [almalinux.org](https://almalinux.org/get-almalinux/).
+## License
 
+Inherited from upstream: **GPL-3.0**. See [`LICENSE`](LICENSE). Fork source code (Makefile, Containerfile, helper scripts) MUST remain GPL-3.0 by upstream copyleft.
 
+## Related repos
 
-## Building Images (Advanced)
+- [`Daedalusys/daedalus-core`](https://github.com/Daedalusys/daedalus-core) — the consumer; uses this image as `FROM ${HEADLESS_BASE_IMAGE}` in its Containerfile
+- [`AlmaLinux/bootc-images`](https://github.com/AlmaLinux/bootc-images) — the upstream
 
-This repository uses `make` to build the images locally.
+## Repository status
 
-### Prerequisites
-
-* `make`
-* A container runtime like `podman` or `docker` (ensure it's running and you have appropriate permissions).
-* Sufficient disk space and internet connectivity.
-
-### Build Instructions
-
-The following examples demonstrate how to build specific variants:
-
-### Example: AlmaLinux OS Kitten 10
-
-```bash
-make \
-  PLATFORM=linux/amd64 \
-  IMAGE_NAME=almalinux-bootc \
-  VERSION_MAJOR=10-kitten
-```
-
-### Example: AlmaLinux OS 10 (x86_64-v2)
-
-```bash
-make \
-  PLATFORM=linux/amd64/v2 \
-  IMAGE_NAME=almalinux-bootc \
-  VERSION_MAJOR=10-kitten
-```
-
-  
-### Example: AlmaLinux 9 (x86_64)
-
-```  
-make \  
-  PLATFORM=linux/amd64 \  
-  IMAGE_NAME=almalinux-bootc \  
-  VERSION_MAJOR=9  
-```
-
-**Explanation of Build Variables:**
-
-* `PLATFORM`: Specifies the target architecture and variant (e.g., linux/amd64, linux/amd64/v2, linux/arm64).  
-* `IMAGE_NAME`: The base name for the output container image. (e.g. almalinux-bootc) 
-* `VERSION_MAJOR`: The AlmaLinux major version (e.g., 9, 10, 10-kitten).
-
-## Contributing and Community
-
-We welcome contributions and feedback!  
-Join the discussion and get involved with the relevant AlmaLinux Special Interest Groups (SIGs):
-
-* **Atomic SIG:** Focused on atomic updates and related tooling (like bootc).  
-  * [Wiki](https://wiki.almalinux.org/sigs/Atomic.html)  
-  * Chat: [Mattermost](https://chat.almalinux.org/almalinux/channels/sigatomic) | [Matrix](https://matrix.to/#/#sig-atomic:almalinux.im)  
-* **Cloud SIG:** Focused on cloud images and deployments.  
-  * [Wiki](https://wiki.almalinux.org/sigs/Cloud.html)  
-  * Chat: [Mattermost](https://chat.almalinux.org/almalinux/channels/sigcloud) | [Matrix](https://matrix.to/#/#sig-cloud:almalinux.im)
+This repo is **active** but **passively maintained**: it is rebuilt when upstream changes, plus on-demand for security patches. New versions are published automatically on push to `main` (when triggered). Manual rebuild via `Actions → build → Run workflow`.
