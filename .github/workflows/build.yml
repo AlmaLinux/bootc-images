@@ -88,11 +88,13 @@ jobs:
         if: github.event_name != 'schedule'
         env:
           ARCH: ${{ matrix.ARCH }}
+          REGISTRY_AUTH_FILE: ~/.docker/config.json
         run: |
           set -euxo pipefail
           IMAGE_DEST="${IMAGE_REGISTRY}/${IMAGE_OWNER}/${IMAGE_NAME}"
           sudo podman push \
             --digestfile=/tmp/digest-${VERSION_MAJOR}-${ARCH} \
+            --authfile ~/.docker/config.json \
             "localhost/${IMAGE_NAME}:${VERSION_MAJOR}-${ARCH}" \
             "docker://${IMAGE_DEST}:${VERSION_MAJOR}-${ARCH}"
 
@@ -153,6 +155,7 @@ jobs:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           IMAGE_OWNER: ${{ env.IMAGE_OWNER }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          REGISTRY_AUTH_FILE: ~/.docker/config.json
         run: |
           set -euxo pipefail
           IMAGE_DEST="${IMAGE_REGISTRY}/${IMAGE_OWNER}/${IMAGE_NAME}"
@@ -166,6 +169,7 @@ jobs:
           done
           sudo podman manifest push \
             --all=false \
+            --authfile ~/.docker/config.json \
             --digestfile=/tmp/manifest-digest-${VERSION_MAJOR} \
             "${IMAGE_DEST}:${VERSION_MAJOR}" \
             "docker://${IMAGE_DEST}:${VERSION_MAJOR}"
