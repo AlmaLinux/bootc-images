@@ -49,12 +49,12 @@ jobs:
       VERSION_MAJOR: ${{ matrix.VERSION_MAJOR }}
     steps:
       - name: Checkout
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936dce9a # v4.1.1
+        uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a
         with:
           submodules: true
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@ce3607c224f5ac1d7858e84d5b4e1d6172c1b0e6
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1
 
       - name: Build image
         run: |
@@ -86,7 +86,7 @@ jobs:
 
       - name: Login to ghcr.io
         if: github.event_name != 'schedule'
-        uses: docker/login-action@5cd7b56da8b1ed3f5dbab76af9c2a5ce831a64
+        uses: docker/login-action@d3b9cdfa580156c018ca5e745c1bf653d8ea46b5
         with:
           registry: ${{ env.IMAGE_REGISTRY }}
           username: ${{ github.actor }}
@@ -120,7 +120,7 @@ jobs:
       id-token: write
     steps:
       - name: Install cosign
-        uses: sigstore/cosign-installer@345a62d386f5f2c4b266de18a362c1b6e5f76b3e
+        uses: sigstore/cosign-installer@b9c35392b7c1401bcc77d30c9b07cf4b1c7a7b07
 
       - name: Install podman
         run: |
@@ -129,13 +129,13 @@ jobs:
           sudo apt-get install -y podman
 
       - name: Fetch digests
-        uses: actions/upload-artifact@5d5c4c030c2c3a7e9e01cd9c4ce0e7b9a16ddc69
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           path: /tmp/digest-*
           retention-days: 1
 
       - name: Login to ghcr.io
-        uses: docker/login-action@5cd7b56da8b1ed3f5dbab76af9c2a5ce831a64
+        uses: docker/login-action@d3b9cdfa580156c018ca5e745c1bf653d8ea46b5
         with:
           registry: ${{ env.IMAGE_REGISTRY }}
           username: ${{ github.actor }}

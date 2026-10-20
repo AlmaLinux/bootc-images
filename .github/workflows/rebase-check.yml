@@ -17,7 +17,7 @@ jobs:
       issues: write
     steps:
       - name: Checkout
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936dce9a
+        uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a
         with:
           fetch-depth: 0
 
@@ -54,14 +54,12 @@ jobs:
           set -euxo pipefail
           gh issue create \
             --title "[rebase-check] Fork is ${BEHIND} commits behind upstream" \
-            --body "Automated rebase check detected this fork is **${BEHIND} commits behind** upstream main (and **${AHEAD} commits ahead**).
+            --body "Automated rebase check found this fork **${BEHIND} commits behind** upstream (and ${AHEAD} ahead).
 
-          **Upstream HEAD**: \`${UPSTREAM}\`
-          **Fork HEAD**: \`${ORIGIN}\`
+          upstream: \`${UPSTREAM}\`
+          fork: \`${ORIGIN}\`
 
-          See [\`docs/REBASE.md\`](../blob/main/docs/REBASE.md).
-
-          cc @maintainers
+          See docs/REBASE.md for procedure. cc @maintainers
           " \
             --label "maintenance"
 
