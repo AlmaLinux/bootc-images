@@ -1,0 +1,75 @@
+---
+name: rebase-check
+
+on:
+  schedule:
+    - cron: "0 0 1 * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check-behind:
+    name: Check upstream lag
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936dce9a
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream
+        run: |
+          set -euxo pipefail
+          git remote add upstream \
+            https://github.com/AlmaLinux/bootc-images.git \
+            2>/dev/null || true
+          git fetch upstream
+
+      - name: Compute lag
+        id: lag
+        run: |
+          set -euxo pipefail
+          UPSTREAM=$(git rev-parse upstream/main)
+          ORIGIN=$(git rev-parse origin/main)
+          BEHIND=$(git rev-list --count "${ORIGIN}..${UPSTREAM}")
+          AHEAD=$(git rev-list --count "${UPSTREAM}..${ORIGIN}")
+          echo "upstream=${UPSTREAM}" >> "$GITHUB_OUTPUT"
+          echo "origin=${ORIGIN}" >> "$GITHUB_OUTPUT"
+          echo "behind=${BEHIND}" >> "$GITHUB_OUTPUT"
+          echo "ahead=${AHEAD}" >> "$GITHUB_OUTPUT"
+          echo "behind=${BEHIND} ahead=${AHEAD}"
+
+      - name: Open issue if significantly behind
+        if: steps.lag.outputs.behind > 10
+        env:
+          BEHIND: ${{ steps.lag.outputs.behind }}
+          AHEAD: ${{ steps.lag.outputs.ahead }}
+          UPSTREAM: ${{ steps.lag.outputs.upstream }}
+          ORIGIN: ${{ steps.lag.outputs.origin }}
+        run: |
+          set -euxo pipefail
+          gh issue create \
+            --title "[rebase-check] Fork is ${BEHIND} commits behind upstream" \
+            --body "Automated rebase check detected this fork is **${BEHIND} commits behind** upstream main (and **${AHEAD} commits ahead**).
+
+          **Upstream HEAD**: \`${UPSTREAM}\`
+          **Fork HEAD**: \`${ORIGIN}\`
+
+          See [\`docs/REBASE.md\`](../blob/main/docs/REBASE.md).
+
+          cc @maintainers
+          " \
+            --label "maintenance"
+
+      - name: Print summary
+        if: steps.lag.outputs.behind <= 10
+        run: |
+          echo "==> Fork is healthy: \
+            ${{ steps.lag.outputs.behind }} commits behind upstream" \
+          echo "==> (Ahead: ${{ steps.lag.outputs.ahead }} \
+            commits - fork-specific work)"
+          echo ""
