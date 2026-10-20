@@ -64,25 +64,17 @@ jobs:
             --security-opt=label=disable \
             --cap-add=all \
             --device /dev/fuse \
-            --manifest localhost/${IMAGE_NAME}:${VERSION_MAJOR} \
+            --tag localhost/${IMAGE_NAME}:${VERSION_MAJOR}-${ARCH} \
             -f ${VERSION_MAJOR}/Containerfile \
             .
+        env:
+          ARCH: ${{ matrix.ARCH }}
 
-      - name: Rechunk
-        run: |
-          set -euxo pipefail
-          sudo podman run --rm --privileged \
-            --security-opt=label=disable \
-            -v /var/lib/containers:/var/lib/containers:z \
-            quay.io/centos-bootc/centos-bootc:stream10 \
-            /usr/libexec/bootc-base-imagectl rechunk \
-            localhost/${IMAGE_NAME}:${VERSION_MAJOR} \
-            localhost/${IMAGE_NAME}:${VERSION_MAJOR}-rechunked
-          sudo podman tag \
-            localhost/${IMAGE_NAME}:${VERSION_MAJOR}-rechunked \
-            localhost/${IMAGE_NAME}:${VERSION_MAJOR}
-          sudo podman rmi \
-            localhost/${IMAGE_NAME}:${VERSION_MAJOR}-rechunked
+      # Rechunk (OSTree chunking optimization) deferred: podman --manifest
+      # across containers fails with 'locating item named "manifest-sha256:..."'
+      # because the rechunk container's view of containers-storage differs
+      # from the build container's. The image is bootc-valid without rechunk;
+      # chunking is an optimization. Re-enable after fixing storage sharing.
 
       - name: Login to ghcr.io
         if: github.event_name != 'schedule'
@@ -101,7 +93,7 @@ jobs:
           IMAGE_DEST="${IMAGE_REGISTRY}/${IMAGE_OWNER}/${IMAGE_NAME}"
           sudo podman push \
             --digestfile=/tmp/digest-${VERSION_MAJOR}-${ARCH} \
-            "localhost/${IMAGE_NAME}:${VERSION_MAJOR}" \
+            "localhost/${IMAGE_NAME}:${VERSION_MAJOR}-${ARCH}" \
             "docker://${IMAGE_DEST}:${VERSION_MAJOR}-${ARCH}"
 
   sign-and-manifest:
