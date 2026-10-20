@@ -9,6 +9,8 @@ variables:
 
 packages:
   - almalinux-kitten-repos
+  - openssh-server
+  - NetworkManager
 
 postprocess:
   - |
@@ -20,6 +22,7 @@ postprocess:
     cat > /usr/lib/bootc/install/20-rhel.toml << EOF
     [install]
     root-fs-type = "xfs"
+    kargs = ["console=ttyS0,115200n8"]
     EOF
   - |
     #!/usr/bin/env bash
@@ -27,6 +30,7 @@ postprocess:
     dnf clean all
     rm /var/{log,cache,lib}/* -rf
     systemctl preset-all
+    systemctl enable sshd NetworkManager
 
 include:
   - standard/manifest.yaml
