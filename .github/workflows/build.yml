@@ -136,11 +136,6 @@ jobs:
           path: /tmp/digests
           merge-multiple: true
 
-      - name: Debug artifact layout
-        run: |
-          echo "==> /tmp/digests contents:"
-          ls -laR /tmp/digests/ || true
-
       - name: Login to ghcr.io
         uses: docker/login-action@d3b9cdfa580156c018ca5e745c1bf653d8ea46b5
         with:
@@ -158,8 +153,7 @@ jobs:
           set -euxo pipefail
           IMAGE_DEST="${IMAGE_REGISTRY}/${IMAGE_OWNER}/${IMAGE_NAME}"
           for arch in amd64 arm64; do
-            DIGEST_FILE="/tmp/digests/digests-${VERSION_MAJOR}-${arch}/digest-${VERSION_MAJOR}-${arch}"
-            digest=$(cat "${DIGEST_FILE}")
+            digest=$(cat "/tmp/digests/digest-${VERSION_MAJOR}-${arch}")
             cosign sign --yes "${IMAGE_DEST}@${digest}"
           done
 
@@ -175,8 +169,7 @@ jobs:
           IMAGE_DEST="${IMAGE_REGISTRY}/${IMAGE_OWNER}/${IMAGE_NAME}"
           sudo podman manifest create "${IMAGE_DEST}:${VERSION_MAJOR}"
           for arch in amd64 arm64; do
-            DIGEST_FILE="/tmp/digests/digests-${VERSION_MAJOR}-${arch}/digest-${VERSION_MAJOR}-${arch}"
-            digest=$(cat "${DIGEST_FILE}")
+            digest=$(cat "/tmp/digests/digest-${VERSION_MAJOR}-${arch}")
             sudo podman manifest add \
               "${IMAGE_DEST}:${VERSION_MAJOR}" \
               "${IMAGE_DEST}@${digest}" \
