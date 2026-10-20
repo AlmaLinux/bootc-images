@@ -98,6 +98,14 @@ jobs:
             "localhost/${IMAGE_NAME}:${VERSION_MAJOR}-${ARCH}" \
             "docker://${IMAGE_DEST}:${VERSION_MAJOR}-${ARCH}"
 
+      - name: Upload digest for signing job
+        if: github.event_name != 'schedule'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: digests-${{ matrix.VERSION_MAJOR }}-${{ matrix.ARCH }}
+          path: /tmp/digest-${{ matrix.VERSION_MAJOR }}-${{ matrix.ARCH }}
+          retention-days: 1
+
   sign-and-manifest:
     name: Sign + manifest
     needs: [set-versions-matrix, build]
@@ -122,11 +130,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y podman
 
-      - name: Fetch digests
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      - name: Download all per-arch digests
+        uses: actions/download-artifact@fa0a91b85d4ddc966c80a7cd6140621cd1f9cf65
         with:
-          path: /tmp/digest-*
-          retention-days: 1
+          path: /tmp/digests
+          merge-multiple: true
 
       - name: Login to ghcr.io
         uses: docker/login-action@d3b9cdfa580156c018ca5e745c1bf653d8ea46b5
