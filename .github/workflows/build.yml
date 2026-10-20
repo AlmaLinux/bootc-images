@@ -153,7 +153,8 @@ jobs:
           set -euxo pipefail
           IMAGE_DEST="${IMAGE_REGISTRY}/${IMAGE_OWNER}/${IMAGE_NAME}"
           for arch in amd64 arm64; do
-            digest=$(cat /tmp/digest-${VERSION_MAJOR}-${arch})
+            DIGEST_FILE="/tmp/digests/digests-${VERSION_MAJOR}-${arch}/digest-${VERSION_MAJOR}-${arch}"
+            digest=$(cat "${DIGEST_FILE}")
             cosign sign --yes "${IMAGE_DEST}@${digest}"
           done
 
@@ -169,7 +170,8 @@ jobs:
           IMAGE_DEST="${IMAGE_REGISTRY}/${IMAGE_OWNER}/${IMAGE_NAME}"
           sudo podman manifest create "${IMAGE_DEST}:${VERSION_MAJOR}"
           for arch in amd64 arm64; do
-            digest=$(cat /tmp/digest-${VERSION_MAJOR}-${arch})
+            DIGEST_FILE="/tmp/digests/digests-${VERSION_MAJOR}-${arch}/digest-${VERSION_MAJOR}-${arch}"
+            digest=$(cat "${DIGEST_FILE}")
             sudo podman manifest add \
               "${IMAGE_DEST}:${VERSION_MAJOR}" \
               "${IMAGE_DEST}@${digest}" \
