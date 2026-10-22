@@ -77,20 +77,62 @@ else
 fi
 
 # Probe 6: optional live container test.
+#
+# ★ 2026-10-22 修:原实现用 `--network host` + `/sbin/init` + 30s 轮询
+# `systemctl is-active sshd`。`--network host` 有两个实际问题:
+#   1. 在 CI runner / 开发机上跑会跟**宿主自己的 sshd 抢 22 端口**;
+#   2. 镜像 postprocess 会 `systemctl enable NetworkManager`,在宿主 netns 里
+#      起来有动宿主网卡的风险。
+# 改为显式端口映射 `-p ${RESCUE_SSH_PORT}:22`,默认 2222 —— 容器内仍是
+# 真实 sshd 监听 22,只是不再共用宿主网络栈。
 if [[ "${RESCUE_LIVE:-0}" == "1" ]]; then
   echo "==> Live check: starting ephemeral container (slow)"
-  container_id=$(podman run --detach --network host --name "rescue-test-$$" "$IMAGE" /sbin/init 2>&1) || {
+  ssh_port="${RESCUE_SSH_PORT:-2222}"
+  echo "    宿主端口 ${ssh_port} → 容器 22"
+  container_id=$(podman run --detach --name "rescue-test-$$" \
+      -p "127.0.0.1:${ssh_port}:22" \
+      "$IMAGE" /sbin/init 2>&1) || {
     echo "FAIL: could not start container from ${IMAGE}"
     fail_count=$((fail_count + 1))
   }
   if [[ -n "${container_id:-}" ]]; then
-    for i in $(seq 1 30); do
+    echo "    ssh -p ${ssh_port} <user>@localhost"
+    ok_live=0
+    for i in $(seq 1 60); do
       if podman exec "$container_id" systemctl is-active sshd >/dev/null 2>&1; then
         echo "OK: sshd is active after ${i}s"
+        ok_live=1
         break
+      fi
+      # systemd 彻底引导完才算就绪;degraded 也算正常(容器里 nfs_pipefs / polkit
+      # 启不来是常态,不是镜像缺陷)。
+      if [[ "$i" -ge 20 ]]; then
+        if podman exec "$container_id" systemctl is-system-running >/dev/null 2>&1; then
+          if podman exec "$container_id" systemctl is-active sshd >/dev/null 2>&1; then
+            echo "OK: sshd is active after ${i}s"
+            ok_live=1
+          fi
+          break
+        fi
       fi
       sleep 1
     done
+    if [[ "$ok_live" -eq 0 ]]; then
+      echo "FAIL: sshd not active within 60s"
+      podman exec "$container_id" systemctl is-system-running 2>&1 | head -1 | sed 's/^/      system state: /'
+      fail_count=$((fail_count + 1))
+    fi
+
+    # GUI service 必须连 unit 文件都不存在(headless 语义),不只是未 enable。
+    for svc in sddm xrdp; do
+      if podman exec "$container_id" systemctl list-unit-files "${svc}.service" --no-legend 2>/dev/null | grep -q .; then
+        echo "FAIL: ${svc}.service unit file exists (headless 镜像不该有)"
+        fail_count=$((fail_count + 1))
+      else
+        echo "OK: ${svc}.service unit file absent"
+      fi
+    done
+
     podman rm -f "$container_id" >/dev/null 2>&1 || true
   fi
 else
