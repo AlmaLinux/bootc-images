@@ -1,15 +1,40 @@
-FROM quay.io/almalinuxorg/9-base:9 as repos
-FROM quay.io/centos-bootc/centos-bootc:stream10 as builder
+# The repos and GPG keys of this image are used to build the image
+FROM quay.io/almalinuxorg/9-base:9 AS repos
+# bootc-base-imagectl and the shared manifests ours includes. They aren't packaged anywhere: the
+# Fedora images get them from https://gitlab.com/fedora/bootc/base-images, and they have the
+# version on its main branch.
+FROM quay.io/fedora/fedora-bootc:latest AS imagectl
 
-RUN rm -rf /etc/yum.repos.d/*
+# Any image with rpm-ostree, selinux-policy-targeted and python3 can build the image. bootc lints
+# what it builds. It has to be the platform being built, so that $basearch matches the repos.
+FROM quay.io/almalinuxorg/9-base:9 AS builder
 
-COPY --from=repos /etc/yum.repos.d/*.repo /etc/yum.repos.d/
+RUN dnf install -y \
+    rpm-ostree \
+    selinux-policy-targeted \
+    python3 \
+    bootc \
+    && dnf clean all
 
-COPY --from=repos /etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-9 /etc/pki/rpm-gpg
+COPY --from=imagectl /usr/share/doc/bootc-base-imagectl/ /usr/share/doc/bootc-base-imagectl/
+COPY --from=imagectl /usr/libexec/bootc-base-imagectl /usr/libexec/bootc-base-imagectl
 
 COPY 9/almalinux-9.yaml /usr/share/doc/bootc-base-imagectl/manifests/
 
-RUN /usr/libexec/bootc-base-imagectl build-rootfs --reinject --manifest=almalinux-9 /target-rootfs
+RUN <<EORUN
+set -xeuo pipefail
+cd /usr/share/doc/bootc-base-imagectl/manifests
+# The manifests are copied into the image (--reinject), so leave only ours at the top level, as
+# the default, with the shared ones it includes. The rest are Fedora's.
+find . -maxdepth 1 -name '*.yaml' ! -name almalinux-9.yaml -delete
+ln -s almalinux-9.yaml default.yaml
+# kmscon is only in Fedora, but it was added to the shared minimal manifest. Remove this once it's
+# moved to fedora-includes upstream. https://gitlab.com/fedora/bootc/base-images/-/merge_requests/953
+sed -i '/^  - kmscon$/d' minimal/manifest.yaml
+EORUN
+
+RUN --mount=type=bind,from=repos,src=/,dst=/repos,rw \
+    /usr/libexec/bootc-base-imagectl build-rootfs --reinject --manifest=almalinux-9 /repos /target-rootfs
 
 ###
 
@@ -17,10 +42,11 @@ FROM scratch
 
 COPY --from=builder /target-rootfs/ /
 
-LABEL containers.bootc 1
-LABEL ostree.bootable 1
-LABEL org.opencontainers.image.vendor AlmaLinux OS Foundation
-LABEL org.opencontainers.image.description AlmaLinux Bootable Container Image
+LABEL containers.bootc=1
+LABEL ostree.bootable=1
+LABEL org.opencontainers.image.vendor="AlmaLinux OS Foundation"
+LABEL org.opencontainers.image.description="AlmaLinux Bootable Container Image"
+ENV container=oci
 RUN bootc container lint --fatal-warnings
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]

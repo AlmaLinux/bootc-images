@@ -9,6 +9,13 @@ variables:
 
 packages:
   - almalinux-repos
+  # CentOS Stream and RHEL include these, but the shared manifests don't:
+  # https://issues.redhat.com/browse/RHEL-35291
+  - yum
+  # DNF integration for bootc
+  - dnf-bootc
+  # `dnf config-manager` and the other core DNF plugins, for derived images
+  - python3-dnf-plugins-core
 
 postprocess:
   - |
@@ -21,6 +28,12 @@ postprocess:
     [install]
     root-fs-type = "xfs"
     EOF
+  # The shared manifests only enable bootloader-update.service if ID is fedora or centos
+  # https://fedoraproject.org/wiki/Changes/AutomaticBootloaderUpdatesBootc
+  - |
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "enable bootloader-update.service" > /usr/lib/systemd/system-preset/85-bootc-bootloader-update.preset
   - |
     #!/usr/bin/env bash
     set -euo pipefail
