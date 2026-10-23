@@ -9,6 +9,12 @@ variables:
 
 packages:
   - almalinux-repos
+  # https://issues.redhat.com/browse/RHEL-35291
+  - yum
+  # dnf-bootc depends on libraries DNF needs for bootc integration
+  - dnf-bootc
+  # Provides `dnf config-manager` and other core DNF plugins for derived images
+  - python3-dnf-plugins-core
 
 postprocess:
   - |
@@ -21,15 +27,12 @@ postprocess:
     [install]
     root-fs-type = "xfs"
     EOF
+  # Upstream only enables bootloader-update.service for ID=fedora/centos
+  # https://fedoraproject.org/wiki/Changes/AutomaticBootloaderUpdatesBootc
   - |
     #!/usr/bin/env bash
     set -euo pipefail
-    # Remove 'bootc' dracut module from initramfs config
-    # AlmaLinux bootc package does not yet ship the dracut module (requires >= 1.11.0)
-    DRACUT_CONF="/usr/lib/dracut/dracut.conf.d/20-bootc-base.conf"
-    if [ -f "${DRACUT_CONF}" ]; then
-      sed -i 's/ bootc / /' "${DRACUT_CONF}"
-    fi
+    echo "enable bootloader-update.service" > /usr/lib/systemd/system-preset/85-bootc-bootloader-update.preset
   - |
     #!/usr/bin/env bash
     set -euo pipefail

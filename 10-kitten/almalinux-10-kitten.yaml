@@ -9,6 +9,12 @@ variables:
 
 packages:
   - almalinux-kitten-repos
+  # https://issues.redhat.com/browse/RHEL-35291
+  - yum
+  # dnf-bootc depends on libraries DNF needs for bootc integration
+  - dnf-bootc
+  # Provides `dnf config-manager` and other core DNF plugins for derived images
+  - python3-dnf-plugins-core
 
 postprocess:
   - |
@@ -21,6 +27,12 @@ postprocess:
     [install]
     root-fs-type = "xfs"
     EOF
+  # Upstream only enables bootloader-update.service for ID=fedora/centos
+  # https://fedoraproject.org/wiki/Changes/AutomaticBootloaderUpdatesBootc
+  - |
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "enable bootloader-update.service" > /usr/lib/systemd/system-preset/85-bootc-bootloader-update.preset
   - |
     #!/usr/bin/env bash
     set -euo pipefail

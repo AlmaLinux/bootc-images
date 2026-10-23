@@ -21,6 +21,9 @@ COPY --from=repos /etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-10 /etc/pki/rpm-gpg
 
 COPY 10/almalinux-10.yaml /usr/share/doc/bootc-base-imagectl/manifests/
 
+# Make the AlmaLinux manifest the default for derived builds (CentOS's standard.yaml needs rhc/insights-client)
+RUN ln -sf almalinux-10.yaml /usr/share/doc/bootc-base-imagectl/manifests/default.yaml
+
 RUN /usr/libexec/bootc-base-imagectl build-rootfs --reinject --manifest=almalinux-10 /target-rootfs
 
 ###
@@ -34,5 +37,6 @@ LABEL ostree.bootable 1
 LABEL org.opencontainers.image.vendor AlmaLinux OS Foundation
 LABEL org.opencontainers.image.description AlmaLinux Bootable Container Image
 RUN bootc container lint --fatal-warnings
+ENV container=oci
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]
