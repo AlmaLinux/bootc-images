@@ -49,23 +49,8 @@ runs:
         username: ${{ inputs.REGISTRY_USER }}
         password: ${{ inputs.REGISTRY_PASSWORD }}
 
-    - name: Check update
-      shell: bash
-      run: |
-        # 'dnf check-update'
-        # exit codes:
-        #   0 - no updates
-        #   100 - updates available
-        #   125 - tag/platform not found
-        #   127 - command not found
-        res=0
-        sudo podman run ${{ env.VARIANT }} --quiet --rm ${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }} dnf check-update || res=$?
-        echo "res=${res}" >> "$GITHUB_ENV"
-        echo "Exit code: '$res'"
-
     - name: Get info
       id: info
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: |
         INFO=$(sudo podman run ${{ env.VARIANT }} --quiet --rm quay.io/almalinuxorg/${{ inputs.VERSION_MAJOR }}-base bash -c "dnf upgrade -y almalinux-release && rpm -q almalinux-gpg-keys && cat /etc/os-release" || true)
@@ -77,7 +62,6 @@ runs:
 
     - name: Build image
       id: build
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: |
         BUILD_TIME=$(date -Iseconds)
@@ -111,7 +95,6 @@ runs:
 
     - name: rechunk image
       id: rechunk
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: |
         make rechunk \
@@ -122,7 +105,6 @@ runs:
 
     - name: Run Image
       id: run
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       env:
         IMAGE_ID: ${{ steps.rechunk.outputs.image-id }}
@@ -139,7 +121,6 @@ runs:
 
     - name: Push to registry
       id: push
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       env:
         IMAGE_ID: ${{ steps.rechunk.outputs.image-id }}
         VERSION: ${{ steps.run.outputs.version-id }}
@@ -156,7 +137,7 @@ runs:
         sudo podman inspect ${{ env.IMAGE_ID }}
 
     - name: Sign Image
-      if: ${{ github.event_name != 'pull_request' && (env.res != 0 || github.event_name == 'workflow_dispatch') }}
+      if: ${{ github.event_name != 'pull_request' }}
       uses: ./.github/actions/sign
       with:
         image-ref: ${{ steps.push.outputs.image-ref }}@${{ steps.push.outputs.digest }}
@@ -165,7 +146,6 @@ runs:
         AWS_REGION: ${{ inputs.AWS_REGION }}
 
     - name: Create Job Outputs
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: |
         mkdir -p /tmp/outputs/digests
@@ -184,7 +164,6 @@ runs:
         cat /tmp/outputs/digests/${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_${{ env.CLEAN_ARCH }}.json
 
     - name: Upload Output Artifacts
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: ${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_${{ env.CLEAN_ARCH }}

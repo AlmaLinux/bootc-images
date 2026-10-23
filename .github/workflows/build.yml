@@ -47,8 +47,18 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       date_stamp: ${{ steps.date-stamp.outputs.date_stamp }}
     steps:
+      - name: Login in to registry
+        if: ${{ github.event_name == 'schedule' }}
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ${{ secrets.IMAGE_REGISTRY }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
       - name: Set matrix
         id: set-matrix
+        env:
+          IMAGE_DEST: ${{ secrets.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
         run: |
           # Format json for versions matrix
           case ${{ github.event_name }} in
@@ -60,7 +70,32 @@ jobs:
               fi
               ;;
             schedule)
-              echo "matrix=$(jq -c <<< '[${{ env.VERSIONS_LIST }}]')" >> $GITHUB_OUTPUT
+              # Only build the versions that have updates. Only amd64 is checked: if it has updates,
+              # all the platforms do. Checking each platform on its own let them disagree, and the
+              # manifest can't be pushed without all of them.
+              #
+              # res:
+              #   0 - no updates
+              #   100 - updates available
+              #   anything else - the check failed (image not found, etc.), build to be safe
+              VERSIONS=()
+              for version in $(jq -r '.[]' <<< '[${{ env.VERSIONS_LIST }}]'); do
+                res=0
+                UPDATES=$(podman run --platform linux/amd64 --quiet --rm "${IMAGE_DEST}:${version}" dnf -q repoquery --upgrades --qf '%{name}') || res=$?
+                UPDATES=$(echo "${UPDATES}" | grep . | LC_ALL=C sort -u || true)
+                if [[ $res -eq 0 && -n "${UPDATES}" ]]; then
+                  res=100
+                fi
+
+                echo "Packages with updates in ${version}:"
+                echo "${UPDATES:-(none)}" | sed 's/^/  /'
+                echo "Exit code: '$res'"
+
+                if [[ $res -ne 0 ]]; then
+                  VERSIONS+=("${version}")
+                fi
+              done
+              echo "matrix=$(jq -cn '$ARGS.positional' --args "${VERSIONS[@]}")" >> $GITHUB_OUTPUT
               ;;
           esac
 
@@ -75,6 +110,7 @@ jobs:
     name: Build image
     runs-on: ${{ matrix.ARCH == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     needs: [set-versions-matrix]
+    if: ${{ needs.set-versions-matrix.outputs.matrix != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -106,7 +142,7 @@ jobs:
         AWS_REGION: ${{ env.AWS_REGION }}
 
   push-manifest:
-    if: ${{ always() && contains(join(needs.*.result, ','), 'success') }}
+    if: ${{ always() && needs.set-versions-matrix.outputs.matrix != '[]' && contains(join(needs.*.result, ','), 'success') }}
     name: Push manifest
     needs: [set-versions-matrix, build]
     runs-on: ubuntu-24.04
