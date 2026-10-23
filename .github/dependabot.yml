@@ -1,0 +1,41 @@
+---
+version: 2
+updates:
+
+  # Maintain dependencies for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directories:
+      - '/'
+      - '/.github/actions/*'
+    schedule:
+      interval: "daily"
+      time: "04:00"
+    open-pull-requests-limit: 5
+    groups:
+      gha-actions-checkout:
+        patterns:
+          - "actions/checkout"
+      gha-actions-download-artifact:
+        patterns:
+          - "actions/download-artifact"
+      gha-actions-upload-artifact:
+        patterns:
+          - "actions/upload-artifact"
+      gha-redhat-actions-podman-login:
+        patterns:
+          - "redhat-actions/podman-login"
+      gha-sigstore-cosign-installer:
+        patterns:
+          - "sigstore/cosign-installer"
+      gha-aws-actions-configure-aws-credentials:
+        patterns:
+          - "aws-actions/configure-aws-credentials"
+      gha-docker-login-action:
+        patterns:
+          - "docker/login-action"
+      gha-docker-metadata-action:
+        patterns:
+          - "docker/metadata-action"
+      gha-mattermost-action-mattermost-notify:
+        patterns:
+          - "mattermost/action-mattermost-notify"
