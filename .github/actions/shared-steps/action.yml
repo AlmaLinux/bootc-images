@@ -123,7 +123,28 @@ runs:
           PLATFORM=${{ env.PLATFORM }} \
           IMAGE_NAME=${{ env.IMAGE_NAME }}
 
-        echo "image-id=sha256:$(sudo podman image inspect ${{ env.IMAGE_NAME }} -f "{{.Id}}")" >> $GITHUB_OUTPUT
+        IMAGE_ID=sha256:$(sudo podman image inspect ${{ env.IMAGE_NAME }} -f "{{.Id}}")
+
+        # A damaged package database still lists every package, but dependency lookups fail, which
+        # breaks dnf in this image and in the images built on top of it.
+        # podman exits with 125 or more when the container itself fails to run.
+        RC=0
+        sudo podman run ${{ env.VARIANT }} --rm ${IMAGE_ID} bash -c '
+            set -euo pipefail
+            rpmdb --verifydb
+            BASE_RPMDB=/usr/lib/sysimage/rpm-ostree-base-db
+            if [[ -d "${BASE_RPMDB}" ]]; then
+                rpmdb --verifydb --dbpath "${BASE_RPMDB}"
+            fi' || RC=$?
+        if (( RC >= 125 )); then
+          echo "::error::Could not check the package database of the rechunked image, the container failed to run"
+          exit 1
+        elif (( RC != 0 )); then
+          echo "::error::The package database of the rechunked image is corrupted"
+          exit 1
+        fi
+
+        echo "image-id=${IMAGE_ID}" >> $GITHUB_OUTPUT
 
     - name: Run Image
       id: run
