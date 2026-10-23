@@ -42,7 +42,7 @@ jobs:
     name: Set versions matrix
     # Run the scheduled builds only in the upstream repository, not in forks
     if: ${{ github.event_name != 'schedule' || github.repository == 'AlmaLinux/bootc-images' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       date_stamp: ${{ steps.date-stamp.outputs.date_stamp }}
@@ -108,7 +108,7 @@ jobs:
 
   build:
     name: Build image
-    runs-on: ${{ matrix.ARCH == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    runs-on: ${{ matrix.ARCH == 'arm64' && 'ubuntu-26.04-arm' || 'ubuntu-26.04' }}
     needs: [set-versions-matrix]
     if: ${{ needs.set-versions-matrix.outputs.matrix != '[]' }}
     strategy:
@@ -145,7 +145,7 @@ jobs:
     if: ${{ always() && needs.set-versions-matrix.outputs.matrix != '[]' && contains(join(needs.*.result, ','), 'success') }}
     name: Push manifest
     needs: [set-versions-matrix, build]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -237,14 +237,6 @@ jobs:
             org.opencontainers.image.version=${{ steps.check.outputs.long-version }}
             org.opencontainers.image.vendor=AlmaLinux OS Foundation
             org.opencontainers.image.description=AlmaLinux Bootable Container Image
-
-      - name: Get a newer podman (from debian trixie)
-        if: ${{ env.skip != 1 }}
-        run: |
-          set -eux
-          echo 'deb [trusted=yes] https://ftp.debian.org/debian/ trixie main' | sudo tee /etc/apt/sources.list.d/trixie.list
-          sudo apt update
-          sudo apt install -y crun/trixie podman/trixie
 
       - name: Create Manifest
         if: ${{ env.skip != 1 }}

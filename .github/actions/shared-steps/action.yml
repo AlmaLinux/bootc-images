@@ -60,6 +60,28 @@ runs:
         echo "version-id=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
         echo "long-version=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"').${{ inputs.DATE_STAMP }}.0" >> $GITHUB_OUTPUT
 
+    # Ubuntu 26.04 ships the bwrap-userns-restrict AppArmor profile. It applies to /usr/bin/bwrap
+    # by path, also inside the build container, and moves everything bwrap starts to a profile
+    # without capabilities. rpm-ostree runs the scriptlets of the packages with bwrap, so they can't
+    # write to /etc and the build fails with "groupadd.rpmostreesave: cannot open /etc/gshadow".
+    # This is the override the bootc project uses in its own CI (bootc-dev/actions#55): it keeps
+    # what bwrap starts in the profile of bwrap itself. AppArmor stays enabled, and nothing is
+    # done in runners without this profile.
+    - name: Allow bwrap to keep its capabilities
+      shell: bash
+      run: |
+        if sudo test -r /etc/apparmor.d/bwrap-userns-restrict &&
+           sudo test -r /sys/kernel/security/apparmor/profiles &&
+           sudo grep -qx 'bwrap (enforce)' /sys/kernel/security/apparmor/profiles; then
+          printf '%s\n' 'priority=100 allow file rwlkm /**,' 'priority=100 allow ix /**,' \
+            | sudo tee /etc/apparmor.d/local/bwrap-userns-restrict > /dev/null
+          sudo apparmor_parser -Q /etc/apparmor.d/bwrap-userns-restrict
+          sudo apparmor_parser -r /etc/apparmor.d/bwrap-userns-restrict
+          echo "AppArmor override for bwrap installed"
+        else
+          echo "The bwrap-userns-restrict AppArmor profile is not enforced in this runner, nothing to do"
+        fi
+
     - name: Build image
       id: build
       shell: bash
