@@ -9,6 +9,13 @@ variables:
 
 packages:
   - almalinux-repos
+  # CentOS Stream and RHEL include these, but the shared manifests don't:
+  # https://issues.redhat.com/browse/RHEL-35291
+  - yum
+  # DNF integration for bootc
+  - dnf-bootc
+  # `dnf config-manager` and the other core DNF plugins, for derived images
+  - python3-dnf-plugins-core
 
 postprocess:
   - |
@@ -21,15 +28,12 @@ postprocess:
     [install]
     root-fs-type = "xfs"
     EOF
+  # The shared manifests only enable bootloader-update.service if ID is fedora or centos
+  # https://fedoraproject.org/wiki/Changes/AutomaticBootloaderUpdatesBootc
   - |
     #!/usr/bin/env bash
     set -euo pipefail
-    # Remove 'bootc' dracut module from initramfs config
-    # AlmaLinux bootc package does not yet ship the dracut module (requires >= 1.11.0)
-    DRACUT_CONF="/usr/lib/dracut/dracut.conf.d/20-bootc-base.conf"
-    if [ -f "${DRACUT_CONF}" ]; then
-      sed -i 's/ bootc / /' "${DRACUT_CONF}"
-    fi
+    echo "enable bootloader-update.service" > /usr/lib/systemd/system-preset/85-bootc-bootloader-update.preset
   - |
     #!/usr/bin/env bash
     set -euo pipefail

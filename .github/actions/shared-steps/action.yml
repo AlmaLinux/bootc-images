@@ -42,30 +42,16 @@ runs:
         ARCH=${{ matrix.ARCH }}
         echo "CLEAN_ARCH=${ARCH//\//_}" >> "$GITHUB_ENV"
 
+    # Also creates $HOME/.docker/config.json, which is used by Cosign for authentication.
     - name: Login in to registry
-      uses: redhat-actions/podman-login@v1 # Also creates $HOME/.docker/config.json, which is used by Cosign for authentication.
+      uses: redhat-actions/podman-login@50c2d9a331bb67c8fdab99b86455fad05e2e3252 # v2.0
       with:
         registry: ${{ inputs.IMAGE_REGISTRY }}
         username: ${{ inputs.REGISTRY_USER }}
         password: ${{ inputs.REGISTRY_PASSWORD }}
 
-    - name: Check update
-      shell: bash
-      run: |
-        # 'dnf check-update'
-        # exit codes:
-        #   0 - no updates
-        #   100 - updates available
-        #   125 - tag/platform not found
-        #   127 - command not found
-        res=0
-        sudo podman run ${{ env.VARIANT }} --quiet --rm ${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }} dnf check-update || res=$?
-        echo "res=${res}" >> "$GITHUB_ENV"
-        echo "Exit code: '$res'"
-
     - name: Get info
       id: info
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: |
         INFO=$(sudo podman run ${{ env.VARIANT }} --quiet --rm quay.io/almalinuxorg/${{ inputs.VERSION_MAJOR }}-base bash -c "dnf upgrade -y almalinux-release && rpm -q almalinux-gpg-keys && cat /etc/os-release" || true)
@@ -75,9 +61,30 @@ runs:
         echo "version-id=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
         echo "long-version=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"').${{ inputs.DATE_STAMP }}.0" >> $GITHUB_OUTPUT
 
+    # Ubuntu 26.04 ships the bwrap-userns-restrict AppArmor profile. It applies to /usr/bin/bwrap
+    # by path, also inside the build container, and moves everything bwrap starts to a profile
+    # without capabilities. rpm-ostree runs the scriptlets of the packages with bwrap, so they can't
+    # write to /etc and the build fails with "groupadd.rpmostreesave: cannot open /etc/gshadow".
+    # This is the override the bootc project uses in its own CI (bootc-dev/actions#55): it keeps
+    # what bwrap starts in the profile of bwrap itself. AppArmor stays enabled, and nothing is
+    # done in runners without this profile.
+    - name: Allow bwrap to keep its capabilities
+      shell: bash
+      run: |
+        if sudo test -r /etc/apparmor.d/bwrap-userns-restrict &&
+           sudo test -r /sys/kernel/security/apparmor/profiles &&
+           sudo grep -qx 'bwrap (enforce)' /sys/kernel/security/apparmor/profiles; then
+          printf '%s\n' 'priority=100 allow file rwlkm /**,' 'priority=100 allow ix /**,' \
+            | sudo tee /etc/apparmor.d/local/bwrap-userns-restrict > /dev/null
+          sudo apparmor_parser -Q /etc/apparmor.d/bwrap-userns-restrict
+          sudo apparmor_parser -r /etc/apparmor.d/bwrap-userns-restrict
+          echo "AppArmor override for bwrap installed"
+        else
+          echo "The bwrap-userns-restrict AppArmor profile is not enforced in this runner, nothing to do"
+        fi
+
     - name: Build image
       id: build
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: |
         BUILD_TIME=$(date -Iseconds)
@@ -111,18 +118,37 @@ runs:
 
     - name: rechunk image
       id: rechunk
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: |
         make rechunk \
           PLATFORM=${{ env.PLATFORM }} \
           IMAGE_NAME=${{ env.IMAGE_NAME }}
 
-        echo "image-id=sha256:$(sudo podman image inspect ${{ env.IMAGE_NAME }} -f "{{.Id}}")" >> $GITHUB_OUTPUT
+        IMAGE_ID=sha256:$(sudo podman image inspect ${{ env.IMAGE_NAME }} -f "{{.Id}}")
+
+        # A damaged package database still lists every package, but dependency lookups fail, which
+        # breaks dnf in this image and in the images built on top of it.
+        # podman exits with 125 or more when the container itself fails to run.
+        RC=0
+        sudo podman run ${{ env.VARIANT }} --rm ${IMAGE_ID} bash -c '
+            set -euo pipefail
+            rpmdb --verifydb
+            BASE_RPMDB=/usr/lib/sysimage/rpm-ostree-base-db
+            if [[ -d "${BASE_RPMDB}" ]]; then
+                rpmdb --verifydb --dbpath "${BASE_RPMDB}"
+            fi' || RC=$?
+        if (( RC >= 125 )); then
+          echo "::error::Could not check the package database of the rechunked image, the container failed to run"
+          exit 1
+        elif (( RC != 0 )); then
+          echo "::error::The package database of the rechunked image is corrupted"
+          exit 1
+        fi
+
+        echo "image-id=${IMAGE_ID}" >> $GITHUB_OUTPUT
 
     - name: Run Image
       id: run
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       env:
         IMAGE_ID: ${{ steps.rechunk.outputs.image-id }}
@@ -139,7 +165,6 @@ runs:
 
     - name: Push to registry
       id: push
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       env:
         IMAGE_ID: ${{ steps.rechunk.outputs.image-id }}
         VERSION: ${{ steps.run.outputs.version-id }}
@@ -156,7 +181,7 @@ runs:
         sudo podman inspect ${{ env.IMAGE_ID }}
 
     - name: Sign Image
-      if: ${{ github.event_name != 'pull_request' && (env.res != 0 || github.event_name == 'workflow_dispatch') }}
+      if: ${{ github.event_name != 'pull_request' }}
       uses: ./.github/actions/sign
       with:
         image-ref: ${{ steps.push.outputs.image-ref }}@${{ steps.push.outputs.digest }}
@@ -165,7 +190,6 @@ runs:
         AWS_REGION: ${{ inputs.AWS_REGION }}
 
     - name: Create Job Outputs
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
       shell: bash
       run: |
         mkdir -p /tmp/outputs/digests
@@ -184,8 +208,7 @@ runs:
         cat /tmp/outputs/digests/${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_${{ env.CLEAN_ARCH }}.json
 
     - name: Upload Output Artifacts
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: ${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}_${{ env.CLEAN_ARCH }}
         retention-days: 1

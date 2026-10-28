@@ -1,10 +1,15 @@
 ---
 name: Sign image
+description: Sign an image with AWS KMS and verify the signature is valid for the public key systems use to verify it
 
 inputs:
   image-ref:
     description: The full reference to the image to sign, including the hash
     required: true
+  public-key:
+    description: The public key systems verify the image with, to check the signature against
+    required: false
+    default: cosign.pub
   KMS_KEY_ALIAS:
     description: The AWS KMS alias to use for signing
     required: false
@@ -18,12 +23,16 @@ inputs:
 runs:
   using: "composite"
   steps:
+    # Newer versions of cosign store the signatures in a format that bootc and podman can't find,
+    # see the verification step below
     - name: Install Cosign
-      uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+      uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      with:
+        cosign-release: 'v2.6.5'
 
     - name: Configure AWS credentials
       id: configure-aws
-      uses: aws-actions/configure-aws-credentials@v4
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
       with:
         role-to-assume: ${{ inputs.AWS_ROLE_ARN }}
         role-session-name: almalinux-container-signing-${{ github.run_id }}
@@ -32,6 +41,38 @@ runs:
         mask-aws-account-id: true
 
     - name: Sign Image with KMS
-      if: ${{ env.AWS_DEFAULT_REGION != '' }}
+      if: ${{ env.AWS_SESSION_TOKEN != '' }}
+      env:
+        KMS_KEY_ALIAS: ${{ inputs.KMS_KEY_ALIAS }}
+        IMAGE_REF: ${{ inputs.image-ref }}
       shell: bash
-      run: cosign sign --yes --key awskms:///alias/${{ inputs.KMS_KEY_ALIAS }} ${{ inputs.image-ref }}
+      run: cosign sign --yes --key "awskms:///alias/${KMS_KEY_ALIAS}" "${IMAGE_REF}"
+
+    # Systems only accept an update if they can find and verify its signature, so make sure that
+    # what was just pushed is what they expect. Verifying with cosign is not enough: the
+    # containers library used by bootc and podman only reads the signatures stored in the
+    # "sha256-<digest>.sig" tag, and newer versions of cosign store them in a different format by
+    # default, which cosign itself is happy to verify.
+    - name: Verify signature
+      if: ${{ env.AWS_SESSION_TOKEN != '' }}
+      env:
+        IMAGE_REF: ${{ inputs.image-ref }}
+        PUBLIC_KEY: ${{ inputs.public-key }}
+      shell: bash
+      run: |
+        # The signature is stored where the containers library looks for it. The reference can
+        # have a tag before the digest, which isn't part of the repository.
+        REPOSITORY="${IMAGE_REF%@*}"
+        if [[ "${REPOSITORY##*/}" == *:* ]]; then
+          REPOSITORY="${REPOSITORY%:*}"
+        fi
+        SIGNATURE_REF="${REPOSITORY}:$(echo "${IMAGE_REF#*@}" | tr ':' '-').sig"
+        if ! skopeo inspect --raw "docker://${SIGNATURE_REF}" > /dev/null; then
+          echo "::error::No signature found in ${SIGNATURE_REF}, systems would refuse to update to this image"
+          exit 1
+        fi
+        echo "Found the signature in ${SIGNATURE_REF}"
+
+        # The signature is valid for the public key that systems use to verify it
+        cosign verify --key "${PUBLIC_KEY}" "${IMAGE_REF}" > /dev/null
+        echo "The signature is valid for ${PUBLIC_KEY}"
